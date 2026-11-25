@@ -1,0 +1,14 @@
+{{define "body"}}
+<main class="hero">
+  <h1 class="logo">trawl<span>.</span></h1>
+  <p class="tag">Many engines, no ads, no tracking. Every page readable.</p>
+  {{template "searchbox" .}}
+  <div class="hints">
+    <span><kbd>/</kbd> focus</span>
+    <span><kbd>!g</kbd> <kbd>!w</kbd> <kbd>!gh</kbd> bangs</span>
+    <span><kbd>!code</kbd> <kbd>!forums</kbd> tabs</span>
+    <span>paste a URL &rarr; reader view</span>
+  </div>
+</main>
+<footer class="foot"><a href="/opensearch.xml" id="addsearch">Add to browser</a> · <a href="/api/search?q=hello">JSON API</a></footer>
+{{end}}
