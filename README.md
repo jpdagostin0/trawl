@@ -1,7 +1,7 @@
 # trawl
 
 A private metasearch engine with a built-in reader, for humans. Think SearXNG and
-Firecrawl's scrape/crawl/map in one ~17 MB Go binary. No Python, Redis, Playwright,
+Firecrawl's scrape/crawl/map in one ~12 MB static Go binary. No Python, Redis, Playwright,
 or Node.
 
 ## Features
