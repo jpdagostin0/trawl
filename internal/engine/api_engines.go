@@ -225,7 +225,7 @@ func (e *HackerNews) Search(ctx context.Context, q Query) ([]Result, error) {
 }
 
 func plural(n int, w string) string {
-	if n == 1 || n == -1 {
+	if n == 1 {
 		return fmt.Sprintf("%d %s", n, w)
 	}
 	return fmt.Sprintf("%d %ss", n, w)
