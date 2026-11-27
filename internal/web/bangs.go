@@ -32,7 +32,10 @@ var bangs = map[string]string{
 }
 
 // Category bangs keep you in trawl but switch tabs.
-var catBangs = map[string]engine.Category{"code": engine.Code, "c": engine.Code, "forums": engine.Forums, "f": engine.Forums, "web": engine.General}
+var catBangs = map[string]engine.Category{
+	"code": engine.Code, "c": engine.Code, "forums": engine.Forums, "f": engine.Forums, "web": engine.General,
+	"images": engine.Images, "i": engine.Images, "news": engine.News, "n": engine.News, "videos": engine.Videos, "v": engine.Videos,
+}
 
 type bangRest struct {
 	query string

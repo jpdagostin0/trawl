@@ -20,65 +20,38 @@ import (
 	"github.com/jpdagostin0/trawl/internal/search"
 )
 
-//go:embed templates/*.html
-var tmplFS embed.FS
-
-//go:embed static
-var staticFS embed.FS
+// dist is the built React frontend (frontend/ -> `npm run build`).
+//
+//go:embed all:dist
+var distFS embed.FS
 
 type Server struct {
 	S       *search.Searcher
 	F       *fetch.Fetcher
 	BaseURL string // public URL, used for OpenSearch; derived from request if empty
-	pages   map[string]*template.Template
-}
-
-var funcs = template.FuncMap{
-	"host": func(raw string) string {
-		u, err := url.Parse(raw)
-		if err != nil {
-			return raw
-		}
-		return strings.TrimPrefix(u.Hostname(), "www.")
-	},
-	"crumbs": func(raw string) string {
-		u, err := url.Parse(raw)
-		if err != nil {
-			return ""
-		}
-		parts := strings.FieldsFunc(u.Path, func(r rune) bool { return r == '/' })
-		if len(parts) > 3 {
-			parts = append(parts[:3], "…")
-		}
-		if len(parts) == 0 {
-			return ""
-		}
-		return " › " + strings.Join(parts, " › ")
-	},
-	"safe":  func(s string) template.HTML { return template.HTML(s) }, // only used on bluemonday-sanitized HTML
-	"add":   func(a, b int) int { return a + b },
-	"qesc":  url.QueryEscape,
-	"title": func(s string) string { return strings.ToUpper(s[:1]) + s[1:] },
+	shell   []byte // dist/index.html
 }
 
 func New(s *search.Searcher, f *fetch.Fetcher, baseURL string) *Server {
-	srv := &Server{S: s, F: f, BaseURL: strings.TrimSuffix(baseURL, "/"), pages: map[string]*template.Template{}}
-	for _, p := range []string{"home", "results", "reader", "error"} {
-		srv.pages[p] = template.Must(template.New("").Funcs(funcs).ParseFS(tmplFS, "templates/base.html", "templates/"+p+".html"))
+	shell, err := distFS.ReadFile("dist/index.html")
+	if err != nil {
+		log.Fatalf("frontend not built: %v (run `npm run build` in frontend/)", err)
 	}
-	return srv
+	return &Server{S: s, F: f, BaseURL: strings.TrimSuffix(baseURL, "/"), shell: shell}
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	static, _ := fs.Sub(staticFS, "static")
+	static, _ := fs.Sub(distFS, "dist")
 	mux.Handle("GET /static/", cacheForever(http.StripPrefix("/static/", http.FileServerFS(static))))
-	mux.HandleFunc("GET /{$}", s.home)
+	mux.HandleFunc("GET /{$}", s.app)
 	mux.HandleFunc("GET /search", s.search)
 	mux.HandleFunc("GET /read", s.read)
 	mux.HandleFunc("GET /suggest", s.suggest)
 	mux.HandleFunc("GET /favicon", s.favicon)
+	mux.HandleFunc("GET /img", s.img)
 	mux.HandleFunc("GET /opensearch.xml", s.opensearch)
+	mux.HandleFunc("GET /api/config", s.apiConfig)
 	mux.HandleFunc("GET /api/search", s.apiSearch)
 	mux.HandleFunc("GET /api/scrape", s.apiScrape)
 	mux.HandleFunc("GET /api/map", s.apiMap)
@@ -98,8 +71,8 @@ func secure(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		// Reader view shows remote images; everything else is same-origin. No third-party scripts, ever.
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src * data:; script-src 'self'; style-src 'self'; frame-ancestors 'none'")
+		// Every image (thumbnails, infobox, reader) goes through /img, so nothing third-party loads.
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; frame-ancestors 'none'")
 		h.ServeHTTP(w, r)
 	})
 }
@@ -113,16 +86,11 @@ func logging(h http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) render(w http.ResponseWriter, page string, status int, data map[string]any) {
+// app serves the React shell; routing happens client-side.
+func (s *Server) app(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	if err := s.pages[page].ExecuteTemplate(w, "base", data); err != nil {
-		log.Printf("template %s: %v", page, err)
-	}
-}
-
-func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "home", 200, map[string]any{"Home": true})
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Write(s.shell)
 }
 
 func parseCategory(c string) engine.Category {
@@ -134,39 +102,32 @@ func parseCategory(c string) engine.Category {
 	return engine.General
 }
 
+// search handles the server-side parts of /search, then hands off to the app:
+// !bangs redirect, and "I'm Feeling Lucky" (btnI, as on google.com) jumps to the top result.
 func (s *Server) search(w http.ResponseWriter, r *http.Request) {
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	qv := r.URL.Query()
+	q := strings.TrimSpace(qv.Get("q"))
 	if q == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
-	cat := parseCategory(r.URL.Query().Get("c"))
-	// !bangs: external redirect, or switch category
 	if target, rest, ok := bang(q); ok {
-		if target != "" {
-			http.Redirect(w, r, target, http.StatusFound)
+		if target == "" {
+			target = "/search?q=" + url.QueryEscape(rest.query) + "&c=" + string(rest.cat)
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+		return
+	}
+	if qv.Has("btnI") {
+		resp := s.S.Search(r.Context(), engine.Query{Text: q, Page: 1, Lang: "en"}, parseCategory(qv.Get("c")), nil)
+		if len(resp.Results) > 0 {
+			http.Redirect(w, r, resp.Results[0].URL, http.StatusFound)
 			return
 		}
-		q, cat = rest.query, rest.cat
+		http.Redirect(w, r, "/search?q="+url.QueryEscape(q)+"&c="+qv.Get("c"), http.StatusFound)
+		return
 	}
-	page, _ := strconv.Atoi(r.URL.Query().Get("p"))
-	page = max(page, 1)
-	resp := s.S.Search(r.Context(), engine.Query{Text: q, Page: page, Lang: "en"}, cat, nil)
-
-	var readerURL string
-	if looksLikeURL(q) {
-		readerURL = q
-	}
-	allFailed := len(resp.Results) == 0
-	for _, e := range resp.Engines {
-		if e.Error == "" {
-			allFailed = false
-		}
-	}
-	s.render(w, "results", 200, map[string]any{
-		"Q": q, "R": resp, "Cat": string(cat), "Cats": engine.Categories, "Page": page,
-		"ReaderURL": readerURL, "AllFailed": allFailed && len(resp.Engines) > 0,
-	})
+	s.app(w, r)
 }
 
 func looksLikeURL(q string) bool {
@@ -180,29 +141,47 @@ func looksLikeURL(q string) bool {
 	return err == nil && strings.Contains(u.Hostname(), ".") && !strings.HasSuffix(u.Hostname(), ".")
 }
 
+// read serves raw markdown for ?format=md; otherwise the app renders the reader.
 func (s *Server) read(w http.ResponseWriter, r *http.Request) {
 	raw := r.URL.Query().Get("url")
 	if raw == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
+	switch r.URL.Query().Get("format") {
+	case "md", "markdown":
+	default:
+		s.app(w, r)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	p, err := s.F.Scrape(ctx, raw)
 	if err != nil {
-		s.render(w, "error", http.StatusBadGateway, map[string]any{"Msg": "Couldn't open this page in reader view.", "Detail": err.Error(), "URL": raw})
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	switch r.URL.Query().Get("format") {
-	case "md", "markdown":
-		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
-		if r.URL.Query().Has("download") {
-			w.Header().Set("Content-Disposition", `attachment; filename="`+slug(p.Title)+`.md"`)
-		}
-		io.WriteString(w, "# "+p.Title+"\n\nSource: "+p.URL+"\n\n"+p.Markdown+"\n")
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	if r.URL.Query().Has("download") {
+		w.Header().Set("Content-Disposition", `attachment; filename="`+slug(p.Title)+`.md"`)
+	}
+	io.WriteString(w, "# "+p.Title+"\n\nSource: "+p.URL+"\n\n"+p.Markdown+"\n")
+}
+
+// img proxies remote images (result thumbnails, infobox pictures, reader images).
+func (s *Server) img(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	ctype, data, err := s.F.Image(ctx, r.URL.Query().Get("u"))
+	if err != nil {
+		http.Error(w, "image unavailable", http.StatusBadGateway)
 		return
 	}
-	s.render(w, "reader", 200, map[string]any{"P": p, "Reader": true})
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	// SVGs opened directly must not run script.
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+	w.Write(data)
 }
 
 func slug(s string) string {
@@ -287,6 +266,44 @@ func apiErr(w http.ResponseWriter, status int, err string) {
 	writeJSON(w, status, map[string]string{"error": err})
 }
 
+// apiConfig tells the frontend which tabs have engines and which bangs exist.
+func (s *Server) apiConfig(w http.ResponseWriter, r *http.Request) {
+	type cat struct {
+		ID      string   `json:"id"`
+		Engines []string `json:"engines"`
+	}
+	var cats []cat
+	for _, c := range engine.Categories {
+		var names []string
+		for _, e := range s.S.Engines() {
+			if e.Category() == c {
+				names = append(names, e.Name())
+			}
+		}
+		if len(names) > 0 {
+			cats = append(cats, cat{string(c), names})
+		}
+	}
+	bangSites := map[string]string{}
+	for name, tmpl := range bangs {
+		if u, err := url.Parse(tmpl); err == nil {
+			bangSites[name] = strings.TrimPrefix(u.Host, "www.")
+		}
+	}
+	catBangNames := map[string]string{}
+	for name, c := range catBangs {
+		catBangNames[name] = string(c)
+	}
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	writeJSON(w, 200, map[string]any{"categories": cats, "bangs": bangSites, "tab_bangs": catBangNames})
+}
+
+// searchResponse adds UI hints to the search response.
+type searchResponse struct {
+	*search.Response
+	ReaderURL string `json:"reader_url,omitempty"` // the query is a URL: offer the reader
+}
+
 func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
 	qv := r.URL.Query()
 	q := strings.TrimSpace(qv.Get("q"))
@@ -323,7 +340,11 @@ func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"search": resp, "scraped": pages})
 		return
 	}
-	writeJSON(w, 200, resp)
+	out := searchResponse{Response: resp}
+	if looksLikeURL(q) {
+		out.ReaderURL = q
+	}
+	writeJSON(w, 200, out)
 }
 
 func (s *Server) apiScrape(w http.ResponseWriter, r *http.Request) {

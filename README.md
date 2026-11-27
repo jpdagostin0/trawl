@@ -1,32 +1,42 @@
 # trawl
 
 A private metasearch engine with a built-in reader, for humans. Think SearXNG and
-Firecrawl's scrape/crawl/map in one ~12 MB static Go binary. No Python, Redis, Playwright,
-or Node.
+Firecrawl's scrape/crawl/map in one static Go binary, wearing the classic 2008 Google
+look. No Python, Redis or Playwright at runtime; Node is only needed to rebuild the UI.
 
 ## Features
 
-- Metasearch: queries Bing, DuckDuckGo, Mojeek, and Wikipedia at the same time
-  (tabs: Web, Code = GitHub + Stack Overflow, Forums = Hacker News). Results are
-  merged with weighted reciprocal-rank fusion, deduplicated by normalized URL, and
-  cleaned of tracking params. Each result shows which engines found it.
+- Metasearch: queries Startpage (Google's index), Bing, DuckDuckGo, Mojeek, and
+  Wikipedia at the same time. Tabs: Web, Images (Bing Images + Wikimedia Commons),
+  News (Bing News + DuckDuckGo News), Code (GitHub + Stack Overflow), Forums (Hacker
+  News). Results are merged with weighted reciprocal-rank fusion and deduplicated by
+  normalized URL. Each result shows which engines found it.
+- ClearURLs: every result URL is cleaned with the [ClearURLs](https://docs.clearurls.xyz)
+  rule set (tracking params, referral tags, redirect wrappers like `google.com/url?q=`),
+  compiled into the binary.
+- Classic UI: React + Bootstrap, styled like google.com circa 2008. Colored logo,
+  Suggest dropdown, I'm Feeling Lucky, the blue results bar, and a "Trawwwwwl" pager.
+  Images get the thumbnail grid with a size filter and a full-size frame. News gets
+  source/age lines and a relevance or date sort.
 - Circuit breaker: an engine that gets rate-limited or captcha'd is paused for a
   while, so it doesn't slow down every search (same idea as SearXNG suspension).
 - Reader view: one click turns any result into a clean, readable article (Mozilla
-  Readability port). Paste a URL into the search box to read it directly. You can
-  change the font size, switch light/dark/sepia themes, and copy or download the
-  page as Markdown.
+  Readability port), presented like the old "cached page" banner. Paste a URL into the
+  search box to read it directly. You can change the font size, and copy or download
+  the page as Markdown.
 - Quick answers: a Wikipedia infobox for entity queries.
 - Bangs: `!g`, `!w`, `!gh`, `!yt`, `!r`, `!so`, `!aw`, `!mdn`, `!pkg`, ... go to the
-  external site. `!code` and `!forums` switch tabs without leaving trawl.
+  external site. `!i`, `!n`, `!code`, and `!forums` switch tabs without leaving trawl.
 - Keyboard: `/` focuses search, `j`/`k` move, `o`/Enter opens, `O` opens in a new
   tab, `r` opens the reader, `n`/`p` change pages.
-- Privacy: the browser never talks to a third party. Autocomplete and favicons are
-  proxied through trawl. Pages are served with `Referrer-Policy: no-referrer` and a
-  strict CSP. Queries are not logged.
+- Privacy: the browser never talks to a third party. Autocomplete, thumbnails, infobox
+  pictures, and reader-view images are proxied through trawl (`/img`, which uses the
+  same SSRF guard as the reader). Pages are served with `Referrer-Policy: no-referrer`
+  and a strict CSP (`img-src 'self'`). Queries are not logged.
 - OpenSearch: "Add to browser" makes trawl your default search engine, with
   suggestions.
-- Works without JavaScript. JS only adds autocomplete, keyboard nav, and reader tools.
+- The web UI needs JavaScript; the JSON API doesn't. Bangs and I'm Feeling Lucky
+  (`/search?q=...&btnI=1`) are plain server redirects.
 
 ## Run
 
@@ -40,14 +50,25 @@ Flags and env vars: `-addr` (`TRAWL_ADDR`), `-base-url` (`TRAWL_BASE_URL`),
 `-allow-private` (`TRAWL_ALLOW_PRIVATE=1`, lets the reader fetch LAN/localhost; for
 trusted use only).
 
+## Frontend
+
+The UI lives in `frontend/` (React, react-bootstrap, react-router, Vite). It builds
+into `internal/web/dist`, which is committed and embedded with `go:embed`, so
+`go build` works without Node.
+
+    cd frontend && npm install && npm run build   # then rebuild the Go binary
+    npm run dev                                   # Vite on :5173, API proxied to :8088
+
 ## API (Firecrawl-ish)
 
-    GET /api/search?q=...&category=general|code|forums&page=1&engines=bing,duckduckgo
+    GET /api/search?q=...&category=general|images|news|code|forums&page=1&engines=bing,duckduckgo
     GET /api/search?q=...&scrape=3          # also returns markdown for the top 3 results
     GET /api/scrape?url=...[&html=1][&links=1]
     GET /api/map?url=...                    # same-site links on a page
     GET /api/crawl?url=...&limit=10&depth=2 # bounded BFS under the start path, respects robots.txt
     GET /read?url=...&format=md             # raw markdown
+    GET /api/config                         # tabs that have engines, bangs
+    GET /img?u=...                          # image proxy
 
 The fetcher refuses loopback, private, and link-local addresses. The check runs when
 the connection is made, so redirects and DNS rebinding can't get around it.
@@ -57,7 +78,8 @@ the connection is made, so redirects and DNS rebinding can't get around it.
     internal/engine   upstream backends (HTML scrapers + JSON APIs)
     internal/search   fan-out, RRF merge, dedupe, circuit breaker, LRU cache
     internal/fetch    safe HTTP client, readability -> markdown, map, crawl, robots.txt
-    internal/web      net/http handlers, embedded templates/CSS/JS, bangs, favicon proxy
+    internal/web      net/http handlers, embedded frontend build, bangs, favicon/image proxy
+    frontend          React + Bootstrap UI (classic look)
 
 To add an engine, implement `engine.Engine` (Name/Category/Weight/Search) and add it
 to `engine.All()`.
@@ -66,7 +88,7 @@ to `engine.All()`.
 
 - Scraped engines (Bing, DuckDuckGo, Mojeek) can rate-limit or captcha a server IP.
   Mojeek currently captchas some IPs, and the breaker pauses it automatically.
-- Brave and Google are not included: Brave cloaks result URLs, and Google blocks
-  scrapers.
+- Brave and Google aren't queried directly: Brave cloaks result URLs, and Google
+  blocks scrapers. Google's index comes in through Startpage.
 - The scraper does not run JavaScript, so pages that only render on the client
   extract poorly. Firecrawl uses headless Chrome for these.
