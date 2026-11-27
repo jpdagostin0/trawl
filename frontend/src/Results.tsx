@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { Col, Form, Modal, Row } from "react-bootstrap";
-import QuickAnswer from "./QuickAnswer.jsx";
-import { BlueBar, Footer, GBar, Logo, Notice, Pager, SearchForm, TipsModal } from "./chrome.jsx";
-import { catLabel, displayURL, fileType, Highlight, host, proxied, relTime, searchURL, useConfig, useNDJSON } from "./util.jsx";
+import QuickAnswer from "./QuickAnswer";
+import { BlueBar, Footer, GBar, Logo, Notice, Pager, SearchForm, TipsModal } from "./chrome";
+import { catLabel, displayURL, fileType, Highlight, host, proxied, relTime, searchURL, useConfig, useNDJSON } from "./util";
+import type { EngineStatus, Result, SearchResponse } from "./types";
 
 export default function Results() {
   const [params] = useSearchParams();
@@ -11,7 +12,7 @@ export default function Results() {
   const q = (params.get("q") || "").trim();
   const c = params.get("c") || "general";
   const cat = categories.some((x) => x.id === c) || c === "general" ? c : "general";
-  const page = Math.max(1, parseInt(params.get("p"), 10) || 1);
+  const page = Math.max(1, parseInt(params.get("p") ?? "", 10) || 1);
   const [tips, setTips] = useState(false);
   const nav = useNavigate();
 
@@ -20,8 +21,8 @@ export default function Results() {
   }, [q, nav]);
 
   // Streamed: the first engine's results show right away, the rest merge in as they answer.
-  const api = q ? `/api/search?${new URLSearchParams({ q, category: cat, page, stream: 1 })}` : null;
-  const { data, error } = useNDJSON(api);
+  const api = q ? `/api/search?${new URLSearchParams({ q, category: cat, page: String(page), stream: "1" })}` : null;
+  const { data, error } = useNDJSON<SearchResponse>(api);
   const r = data && data.query === q && data.category === cat && data.page === page ? data : null;
   document.title = `${q} - trawl ${cat === "general" ? "Search" : catLabel[cat] ?? "Search"}`;
 
@@ -30,7 +31,7 @@ export default function Results() {
   const failed = r?.done && !results.length && r.engines.length > 0 && r.engines.every((e) => e.error);
   const first = r ? (page - 1) * results.length + 1 : 0;
 
-  const href = (p) => searchURL(q, cat, p);
+  const href = (p: number) => searchURL(q, cat, p);
   const sub = cat === "general" ? undefined : cat;
 
   return (
@@ -91,7 +92,7 @@ export default function Results() {
   );
 }
 
-function Sorry({ children }) {
+function Sorry({ children }: { children: ReactNode }) {
   return (
     <div className="sorry">
       <b>We&apos;re sorry...</b>
@@ -100,7 +101,7 @@ function Sorry({ children }) {
   );
 }
 
-function NoMatch({ q }) {
+function NoMatch({ q }: { q: string }) {
   return (
     <div className="nomatch">
       <p>
@@ -117,12 +118,14 @@ function NoMatch({ q }) {
 }
 
 // j/k/o/O/r keyboard navigation; the selected result gets the old blue ► marker.
-function useKeyNav(count, open) {
+type OpenKey = "o" | "Enter" | "O" | "r";
+
+function useKeyNav(count: number, open: (i: number, key: OpenKey) => void) {
   const [sel, setSel] = useState(-1);
   useEffect(() => setSel(-1), [count]);
   useEffect(() => {
-    const k = (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    const k = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName)) return;
       if (document.querySelector(".modal.show")) return;
       switch (e.key) {
         case "j":
@@ -141,7 +144,7 @@ function useKeyNav(count, open) {
         case "r":
           if (sel >= 0) {
             e.preventDefault();
-            open(sel, e.key);
+            open(sel, e.key as OpenKey);
           }
           break;
         case "n":
@@ -161,12 +164,12 @@ function useKeyNav(count, open) {
   return sel;
 }
 
-const readerHref = (u) => `/read?url=${encodeURIComponent(u)}`;
+const readerHref = (u: string) => `/read?url=${encodeURIComponent(u)}`;
 
-function useOpen(results) {
+function useOpen(results: Result[]) {
   const nav = useNavigate();
   return useMemo(
-    () => (i, key) => {
+    () => (i: number, key: OpenKey) => {
       const u = results[i]?.url;
       if (!u) return;
       if (key === "r") nav(readerHref(u));
@@ -177,7 +180,7 @@ function useOpen(results) {
   );
 }
 
-function WebResults({ q, results, cat }) {
+function WebResults({ q, results, cat }: { q: string; results: Result[]; cat: string }) {
   const open = useOpen(results);
   const sel = useKeyNav(results.length, open);
   return (
@@ -216,27 +219,29 @@ function WebResults({ q, results, cat }) {
   );
 }
 
-const SIZES = {
+type SizeFilter = "all" | "large" | "medium" | "small";
+
+const SIZES: Record<SizeFilter, [string, (w: number, h: number) => boolean]> = {
   all: ["All image sizes", () => true],
   large: ["Large images", (w, h) => Math.max(w, h) >= 1000],
   medium: ["Medium images", (w, h) => Math.max(w, h) >= 400 && Math.max(w, h) < 1000],
   small: ["Small images", (w, h) => Math.max(w, h) > 0 && Math.max(w, h) < 400],
 };
 
-const dims = (res) => {
+const dims = (res?: string): [number, number] => {
   const m = /(\d+)\D+(\d+)/.exec(res || "");
   return m ? [+m[1], +m[2]] : [0, 0];
 };
 
-function ImageResults({ q, results }) {
-  const [size, setSize] = useState("all");
-  const [shown, setShown] = useState(null);
+function ImageResults({ q, results }: { q: string; results: Result[] }) {
+  const [size, setSize] = useState<SizeFilter>("all");
+  const [shown, setShown] = useState<Result | null>(null);
   const list = results.filter((r) => SIZES[size][1](...dims(r.resolution)));
   return (
     <>
       <div className="isize">
         Showing:{" "}
-        <Form.Select size="sm" value={size} onChange={(e) => setSize(e.target.value)} aria-label="Image size" className="classic-select">
+        <Form.Select size="sm" value={size} onChange={(e) => setSize(e.target.value as SizeFilter)} aria-label="Image size" className="classic-select">
           {Object.entries(SIZES).map(([k, [label]]) => (
             <option key={k} value={k}>
               {label}
@@ -280,7 +285,7 @@ function ImageResults({ q, results }) {
 }
 
 // Thumbnail with fallback: thumbnail -> full image -> hide the cell.
-function Thumb({ r }) {
+function Thumb({ r }: { r: Result }) {
   const srcs = [...new Set([r.thumbnail, r.image].filter(Boolean))];
   const [i, setI] = useState(0);
   return (
@@ -294,7 +299,7 @@ function Thumb({ r }) {
 }
 
 // The old "Below is the image at full size" frame, as a modal.
-function ImageFrame({ r, onHide }) {
+function ImageFrame({ r, onHide }: { r: Result | null; onHide: () => void }) {
   const [fallback, setFallback] = useState(false);
   useEffect(() => setFallback(false), [r]);
   if (!r) return null;
@@ -331,7 +336,7 @@ function ImageFrame({ r, onHide }) {
   );
 }
 
-function NewsResults({ q, results }) {
+function NewsResults({ q, results }: { q: string; results: Result[] }) {
   const [byDate, setByDate] = useState(false);
   const list = byDate ? [...results].sort((a, b) => (b.published || "").localeCompare(a.published || "")) : results;
   const open = useOpen(list);
@@ -385,7 +390,7 @@ function NewsResults({ q, results }) {
   );
 }
 
-function NewsThumb({ r }) {
+function NewsThumb({ r }: { r: Result }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
   return (
@@ -396,7 +401,7 @@ function NewsThumb({ r }) {
   );
 }
 
-function EngineLine({ engines, pending }) {
+function EngineLine({ engines, pending }: { engines: EngineStatus[]; pending: boolean }) {
   const [open, setOpen] = useState(false);
   if (!engines?.length) return null;
   const ok = engines.filter((e) => !e.error).length;

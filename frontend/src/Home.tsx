@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
-import { Footer, GBar, Logo, SearchForm, TipsModal } from "./chrome.jsx";
-import { useConfig } from "./util.jsx";
+import { Footer, GBar, Logo, SearchForm, TipsModal } from "./chrome";
+import { useConfig } from "./util";
 
-const blurbs = {
+const blurbs: Record<string, ReactNode> = {
   general: (
     <>
       Many engines, no ads, no tracking. Paste a URL to read it in <b>Reader view</b>.
@@ -17,7 +17,7 @@ export default function Home() {
   const [params] = useSearchParams();
   const { categories } = useConfig();
   const c = params.get("c");
-  const cat = categories.some((x) => x.id === c) ? c : "general";
+  const cat = c && categories.some((x) => x.id === c) ? c : "general";
   const [tips, setTips] = useState(false);
   document.title = cat === "general" ? "trawl" : `trawl ${cat[0].toUpperCase() + cat.slice(1)}`;
 

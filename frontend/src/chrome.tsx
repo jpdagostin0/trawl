@@ -1,9 +1,9 @@
 // Page chrome: logo, the black-and-blue link bar, search form with suggest, footer.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { Link, useNavigate } from "react-router";
 import { Button, Modal, Table } from "react-bootstrap";
 import NavDropdown from "react-bootstrap/NavDropdown";
-import { catLabel, searchURL, useConfig } from "./util.jsx";
+import { catLabel, searchURL, useConfig } from "./util";
 
 // t r a w l in blue, red, yellow, blue, green, the way G o o g l e was colored.
 const LETTERS = [
@@ -14,7 +14,7 @@ const LETTERS = [
   ["l", "lg"],
 ];
 
-export function Logo({ size = "large", sub }) {
+export function Logo({ size = "large", sub }: { size?: "large" | "small" | "tiny"; sub?: string }) {
   return (
     <Link to={sub ? `/?c=${sub}` : "/"} className={`logo logo-${size}`} title="trawl Home" aria-label="trawl">
       <span className="logo-word">
@@ -32,12 +32,12 @@ export function Logo({ size = "large", sub }) {
 const PRIMARY = ["general", "images", "news", "videos"];
 
 // The top-left "Web Images News ... more ▼" bar and the top-right links.
-export function GBar({ cat = "general", q = "", onTips }) {
+export function GBar({ cat = "general", q = "", onTips }: { cat?: string; q?: string; onTips: () => void }) {
   const { categories } = useConfig();
   const ids = categories.map((c) => c.id);
   const primary = PRIMARY.filter((c) => ids.includes(c));
   const more = ids.filter((c) => !PRIMARY.includes(c));
-  const href = (c) => (q ? searchURL(q, c) : c === "general" ? "/" : `/?c=${c}`);
+  const href = (c: string) => (q ? searchURL(q, c) : c === "general" ? "/" : `/?c=${c}`);
   return (
     <div className="gbar">
       <nav className="gbar-left">
@@ -69,8 +69,14 @@ export function GBar({ cat = "general", q = "", onTips }) {
 }
 
 // Google Suggest, 2008: a black-bordered list under the box, blue selected row.
-function Suggest({ value, onPick, inputRef }) {
-  const [items, setItems] = useState([]);
+interface SuggestProps {
+  value: string;
+  onPick: (s: string, go: boolean) => void;
+  inputRef: RefObject<HTMLInputElement | null>;
+}
+
+function Suggest({ value, onPick, inputRef }: SuggestProps) {
+  const [items, setItems] = useState<string[]>([]);
   const [idx, setIdx] = useState(-1);
   const [open, setOpen] = useState(false);
   const typed = useRef(value); // the box's initial value is not "typing"
@@ -84,20 +90,23 @@ function Suggest({ value, onPick, inputRef }) {
     const t = setTimeout(async () => {
       if (document.activeElement !== inputRef.current) return;
       try {
-        const j = await (await fetch("/suggest?q=" + encodeURIComponent(v), { signal: ctrl.signal })).json();
+        const j: [string, string[]?] = await (await fetch("/suggest?q=" + encodeURIComponent(v), { signal: ctrl.signal })).json();
         if (document.activeElement !== inputRef.current) return;
         setItems((j[1] || []).slice(0, 10));
         setIdx(-1);
         setOpen(true);
       } catch {}
     }, 120);
-    return () => (clearTimeout(t), ctrl.abort());
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
   }, [value, inputRef]);
 
   useEffect(() => {
     const el = inputRef.current;
     if (!el) return;
-    const key = (e) => {
+    const key = (e: KeyboardEvent) => {
       if (!open || !items.length) return;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -111,7 +120,7 @@ function Suggest({ value, onPick, inputRef }) {
       } else if (e.key === "Escape") setOpen(false);
     };
     const blur = () => setTimeout(() => setOpen(false), 150);
-    const focus = () => items.length && setOpen(true);
+    const focus = () => items.length > 0 && setOpen(true);
     el.addEventListener("keydown", key);
     el.addEventListener("blur", blur);
     el.addEventListener("focus", focus);
@@ -146,21 +155,28 @@ function Suggest({ value, onPick, inputRef }) {
   );
 }
 
-const buttonLabel = { general: "trawl Search", images: "Search Images", news: "Search News", videos: "Search Video" };
+const buttonLabel: Record<string, string | undefined> = { general: "trawl Search", images: "Search Images", news: "Search News", videos: "Search Video" };
 
 // variant: "home" (big centered box + two buttons), "top" (results header), "bottom" (results footer box)
-export function SearchForm({ q = "", cat = "general", variant = "top", onTips }) {
+interface SearchFormProps {
+  q?: string;
+  cat?: string;
+  variant?: "home" | "top" | "bottom";
+  onTips?: () => void;
+}
+
+export function SearchForm({ q = "", cat = "general", variant = "top", onTips }: SearchFormProps) {
   const [value, setValue] = useState(q);
   const nav = useNavigate();
-  const input = useRef(null);
-  const form = useRef(null);
+  const input = useRef<HTMLInputElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   useEffect(() => setValue(q), [q]);
 
   // "/" focuses the box from anywhere (only the top/home form listens).
   useEffect(() => {
     if (variant === "bottom") return;
-    const k = (e) => {
-      if (e.key !== "/" || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    const k = (e: KeyboardEvent) => {
+      if (e.key !== "/" || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName)) return;
       e.preventDefault();
       input.current?.focus();
       input.current?.select();
@@ -169,9 +185,9 @@ export function SearchForm({ q = "", cat = "general", variant = "top", onTips })
     return () => document.removeEventListener("keydown", k);
   }, [variant]);
 
-  const submit = (e) => {
+  const submit = (e: FormEvent<HTMLFormElement>) => {
     const v = value.trim();
-    const lucky = e.nativeEvent?.submitter?.name === "btnI";
+    const lucky = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.name === "btnI";
     // Bangs and I'm Feeling Lucky are server redirects: let the browser submit normally.
     if (lucky || /(^|\s)!\S/.test(v)) return;
     e.preventDefault();
@@ -179,7 +195,7 @@ export function SearchForm({ q = "", cat = "general", variant = "top", onTips })
     input.current?.blur();
     nav(searchURL(v, cat));
   };
-  const pick = (s, go) => {
+  const pick = (s: string, go: boolean) => {
     setValue(s);
     if (go) nav(searchURL(s, cat));
   };
@@ -258,7 +274,7 @@ const KEYS = [
   ["n / p", "next / previous page"],
 ];
 
-export function TipsModal({ show, onHide }) {
+export function TipsModal({ show, onHide }: { show: boolean; onHide: () => void }) {
   const { bangs, tab_bangs } = useConfig();
   return (
     <Modal show={show} onHide={onHide} size="lg" scrollable className="classic-modal">
@@ -314,7 +330,7 @@ export function TipsModal({ show, onHide }) {
 }
 
 // "Trawwwwwl" pager: one w per page, the current one red, with numbers underneath.
-export function Pager({ page, hasNext, href }) {
+export function Pager({ page, hasNext, href }: { page: number; hasNext: boolean; href: (page: number) => string }) {
   const start = Math.max(1, page - 5);
   const end = hasNext ? Math.max(start + 9, page + 4) : page;
   const pages = [];
@@ -386,7 +402,7 @@ export function Pager({ page, hasNext, href }) {
 }
 
 // Light blue bar under the header: "Web    Results 1 - 10 for q. (0.23 seconds)"
-export function BlueBar({ label, children }) {
+export function BlueBar({ label, children }: { label: string; children?: ReactNode }) {
   return (
     <div className="ssb">
       <div className="ssb-label">{label}</div>
@@ -396,6 +412,6 @@ export function BlueBar({ label, children }) {
 }
 
 // Yellow notice, like the old "Loading..." and message bars.
-export function Notice({ children }) {
+export function Notice({ children }: { children?: ReactNode }) {
   return <span className="notice-y">{children}</span>;
 }

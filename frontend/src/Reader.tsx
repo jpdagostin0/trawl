@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { Logo, Notice } from "./chrome.jsx";
-import { host, proxied, store, useJSON } from "./util.jsx";
+import { Logo, Notice } from "./chrome";
+import { host, proxied, store, useJSON } from "./util";
+import type { Page } from "./types";
 
 // Route article images through /img and drop srcset (it would bypass the proxy).
-function proxyImages(html) {
+function proxyImages(html: string) {
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
   for (const img of doc.querySelectorAll("img")) {
     const src = img.getAttribute("src");
@@ -14,19 +15,19 @@ function proxyImages(html) {
     else img.remove();
   }
   doc.querySelectorAll("source").forEach((s) => s.remove());
-  return doc.body.firstChild.innerHTML;
+  return (doc.body.firstElementChild as HTMLElement).innerHTML;
 }
 
 export default function Reader() {
   const [params] = useSearchParams();
   const url = params.get("url") || "";
   const nav = useNavigate();
-  const { data: p, error, loading } = useJSON(url ? `/api/scrape?html=1&url=${encodeURIComponent(url)}` : null);
-  const [size, setSize] = useState(+store.get("size", 16));
+  const { data: p, error, loading } = useJSON<Page>(url ? `/api/scrape?html=1&url=${encodeURIComponent(url)}` : null);
+  const [size, setSize] = useState(+store.get("size", "16"));
   const [msg, setMsg] = useState("");
   const html = useMemo(() => (p?.html ? proxyImages(p.html) : ""), [p]);
 
-  useEffect(() => store.set("size", size), [size]);
+  useEffect(() => store.set("size", String(size)), [size]);
   useEffect(() => {
     document.title = p ? `${p.title} - trawl Reader` : "trawl Reader";
   }, [p]);
@@ -37,7 +38,7 @@ export default function Reader() {
   }, [msg]);
 
   const md = `/read?url=${encodeURIComponent(url)}&format=md`;
-  const copy = async (e) => {
+  const copy = async (e: MouseEvent) => {
     e.preventDefault();
     try {
       await navigator.clipboard.writeText(await (await fetch(md)).text());
@@ -46,7 +47,7 @@ export default function Reader() {
       setMsg("Couldn't copy.");
     }
   };
-  const back = (e) => {
+  const back = (e: MouseEvent) => {
     if (history.length > 1) {
       e.preventDefault();
       nav(-1);

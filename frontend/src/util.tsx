@@ -1,7 +1,8 @@
 // Small helpers shared by the pages.
 import { useEffect, useState } from "react";
+import type { Config } from "./types";
 
-export async function getJSON(url, signal) {
+export async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
   const r = await fetch(url, { signal });
   let j;
   try {
@@ -13,31 +14,39 @@ export async function getJSON(url, signal) {
   return j;
 }
 
+export interface Fetched<T> {
+  data: T | null;
+  error: Error | null;
+  loading: boolean;
+}
+
+const isAbort = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
+
 // Fetch JSON for `url` (null = skip). Aborts when url changes.
-export function useJSON(url) {
-  const [state, setState] = useState({ data: null, error: null, loading: !!url });
+export function useJSON<T>(url: string | null): Fetched<T> {
+  const [state, setState] = useState<Fetched<T>>({ data: null, error: null, loading: !!url });
   useEffect(() => {
     if (!url) return;
     const ctrl = new AbortController();
     setState((s) => ({ ...s, loading: true, error: null }));
-    getJSON(url, ctrl.signal)
+    getJSON<T>(url, ctrl.signal)
       .then((data) => setState({ data, error: null, loading: false }))
-      .catch((error) => error.name !== "AbortError" && setState({ data: null, error, loading: false }));
+      .catch((error: Error) => !isAbort(error) && setState({ data: null, error, loading: false }));
     return () => ctrl.abort();
   }, [url]);
   return state;
 }
 
 // Like useJSON, for newline-delimited JSON: data is replaced by each line as it arrives.
-export function useNDJSON(url) {
-  const [state, setState] = useState({ data: null, error: null, loading: !!url });
+export function useNDJSON<T>(url: string | null): Fetched<T> {
+  const [state, setState] = useState<Fetched<T>>({ data: null, error: null, loading: !!url });
   useEffect(() => {
     if (!url) return;
     const ctrl = new AbortController();
     setState((s) => ({ ...s, loading: true, error: null }));
     (async () => {
       const r = await fetch(url, { signal: ctrl.signal });
-      if (!r.ok) {
+      if (!r.ok || !r.body) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j.error || `${r.status} ${r.statusText}`);
       }
@@ -48,32 +57,32 @@ export function useNDJSON(url) {
         if (done) break;
         buf += value;
         const lines = buf.split("\n");
-        buf = lines.pop();
+        buf = lines.pop() ?? "";
         const last = lines.filter((l) => l.trim()).pop();
-        if (last) setState({ data: JSON.parse(last), error: null, loading: true });
+        if (last) setState({ data: JSON.parse(last) as T, error: null, loading: true });
       }
       setState((s) => ({ ...s, loading: false }));
-    })().catch((error) => error.name !== "AbortError" && setState({ data: null, error, loading: false }));
+    })().catch((error: Error) => !isAbort(error) && setState({ data: null, error, loading: false }));
     return () => ctrl.abort();
   }, [url]);
   return state;
 }
 
-let configPromise;
-const fallbackConfig = { categories: [{ id: "general", engines: [] }], bangs: {}, tab_bangs: {} };
+let configPromise: Promise<Config> | undefined;
+const fallbackConfig: Config = { categories: [{ id: "general", engines: [] }], bangs: {}, tab_bangs: {} };
 export function useConfig() {
   const [cfg, setCfg] = useState(fallbackConfig);
   useEffect(() => {
-    configPromise ??= getJSON("/api/config").catch(() => fallbackConfig);
+    configPromise ??= getJSON<Config>("/api/config").catch(() => fallbackConfig);
     configPromise.then(setCfg);
   }, []);
   return cfg;
 }
 
 // All third-party images go through trawl's proxy.
-export const proxied = (u) => (u ? "/img?u=" + encodeURIComponent(u) : "");
+export const proxied = (u?: string) => (u ? "/img?u=" + encodeURIComponent(u) : "");
 
-export function host(u) {
+export function host(u: string) {
   try {
     return new URL(u).hostname.replace(/^www\./, "");
   } catch {
@@ -82,7 +91,7 @@ export function host(u) {
 }
 
 // The green URL line, 2008 style: host + path, no scheme, cut at ~70 chars.
-export function displayURL(u) {
+export function displayURL(u: string) {
   let s = u.replace(/^https?:\/\//, "");
   try {
     const p = new URL(u);
@@ -91,15 +100,15 @@ export function displayURL(u) {
   return s.length > 72 ? s.slice(0, 69) + "..." : s;
 }
 
-export function fileType(u) {
+export function fileType(u?: string) {
   const m = /\.(jpe?g|png|gif|webp|svg|bmp|tiff?|avif)(?:$|[?#])/i.exec(u || "");
   return m ? m[1].toLowerCase().replace("jpeg", "jpg") : "";
 }
 
-export function relTime(iso) {
+export function relTime(iso?: string) {
   if (!iso) return "";
   const t = new Date(iso);
-  const mins = Math.round((Date.now() - t) / 60000);
+  const mins = Math.round((Date.now() - t.getTime()) / 60000);
   if (isNaN(mins)) return "";
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
@@ -110,10 +119,10 @@ export function relTime(iso) {
   return t.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Bold the query terms, like classic result titles and snippets.
-export function Highlight({ text, q }) {
+export function Highlight({ text, q }: { text?: string; q?: string }) {
   if (!text) return null;
   const terms = (q || "")
     .toLowerCase()
@@ -124,16 +133,16 @@ export function Highlight({ text, q }) {
   return text.split(re).map((part, i) => (i % 2 ? <b key={i}>{part}</b> : part));
 }
 
-export const catLabel = { general: "Web", images: "Images", videos: "Video", news: "News", code: "Code", forums: "Forums", science: "Science" };
+export const catLabel: Record<string, string | undefined> = { general: "Web", images: "Images", videos: "Video", news: "News", code: "Code", forums: "Forums", science: "Science" };
 
-export function searchURL(q, cat = "general", page = 1) {
+export function searchURL(q: string, cat = "general", page = 1) {
   const p = new URLSearchParams({ q });
   if (cat && cat !== "general") p.set("c", cat);
-  if (page > 1) p.set("p", page);
+  if (page > 1) p.set("p", String(page));
   return "/search?" + p;
 }
 
 export const store = {
-  get: (k, d) => localStorage.getItem("trawl." + k) ?? d,
-  set: (k, v) => localStorage.setItem("trawl." + k, v),
+  get: (k: string, d: string) => localStorage.getItem("trawl." + k) ?? d,
+  set: (k: string, v: string) => localStorage.setItem("trawl." + k, v),
 };

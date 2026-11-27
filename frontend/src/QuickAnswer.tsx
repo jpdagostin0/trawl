@@ -1,17 +1,18 @@
 import { Link } from "react-router";
-import { Highlight, host, proxied } from "./util.jsx";
+import { Highlight, host, proxied } from "./util";
+import type { Answer, Infobox } from "./types";
 
-const readerHref = (u) => `/read?url=${encodeURIComponent(u)}`;
+const readerHref = (u: string) => `/read?url=${encodeURIComponent(u)}`;
 
 // The onebox above the results: the old calculator line for math and unit
 // conversions, or a Wikipedia summary for things.
-export default function QuickAnswer({ answer, infobox, q }) {
+export default function QuickAnswer({ answer, infobox, q }: { answer?: Answer; infobox?: Infobox; q: string }) {
   if (answer) return <Calc a={answer} />;
   if (infobox) return <Wiki ib={infobox} q={q} />;
   return null;
 }
 
-function Calc({ a }) {
+function Calc({ a }: { a: Answer }) {
   return (
     <table className="onebox calc" role="presentation">
       <tbody>
@@ -33,7 +34,7 @@ function Calc({ a }) {
   );
 }
 
-function Wiki({ ib, q }) {
+function Wiki({ ib, q }: { ib: Infobox; q: string }) {
   const text = ib.extract.length > 420 ? ib.extract.slice(0, 417).replace(/\s+\S*$/, "") + " ..." : ib.extract;
   return (
     <table className="onebox wiki" role="presentation">
