@@ -6,6 +6,7 @@ import "./classic.css";
 import Home from "./Home";
 import Results from "./Results";
 import Reader from "./Reader";
+import Archive from "./Archive";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -14,6 +15,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/" element={<Home />} />
         <Route path="/search" element={<Results />} />
         <Route path="/read" element={<Reader />} />
+        <Route path="/archive" element={<Archive />} />
         <Route path="*" element={<Home />} />
       </Routes>
     </BrowserRouter>

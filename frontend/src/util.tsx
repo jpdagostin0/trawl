@@ -37,6 +37,28 @@ export function useJSON<T>(url: string | null): Fetched<T> {
   return state;
 }
 
+// Yield the complete NDJSON frames from each read in order.
+export async function* readNDJSON<Frame>(response: Response): AsyncGenerator<Frame[]> {
+  if (!response.ok || !response.body) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `${response.status} ${response.statusText}`);
+  }
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      if (lines.length) yield lines.filter((line) => line.trim()).map((line) => JSON.parse(line) as Frame);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 // Fold newline-delimited events in order; frames in one browser read can share a render.
 export function useNDJSON<T, Frame>(url: string | null, merge: (data: T | null, frame: Frame) => T | null): Fetched<T> {
   const [state, setState] = useState<Fetched<T>>({ data: null, error: null, loading: !!url });
@@ -47,23 +69,10 @@ export function useNDJSON<T, Frame>(url: string | null, merge: (data: T | null, 
     let data: T | null = null;
     (async () => {
       const r = await fetch(url, { signal: ctrl.signal });
-      if (!r.ok || !r.body) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j.error || `${r.status} ${r.statusText}`);
-      }
-      const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
-      let buf = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += value;
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
+      for await (const frames of readNDJSON<Frame>(r)) {
         if (ctrl.signal.aborted) return;
-        for (const line of lines) {
-          if (line.trim()) data = merge(data, JSON.parse(line) as Frame);
-        }
-        if (lines.length) setState({ data, error: null, loading: true });
+        for (const frame of frames) data = merge(data, frame);
+        if (frames.length) setState({ data, error: null, loading: true });
       }
       if (!ctrl.signal.aborted) setState({ data, error: null, loading: false });
     })().catch((error: Error) => !ctrl.signal.aborted && setState({ data, error, loading: false }));

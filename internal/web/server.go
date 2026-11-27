@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jpdagostin0/trawl/internal/archive"
 	"github.com/jpdagostin0/trawl/internal/engine"
 	"github.com/jpdagostin0/trawl/internal/feedback"
 	"github.com/jpdagostin0/trawl/internal/fetch"
@@ -27,12 +28,14 @@ import (
 var distFS embed.FS
 
 type Server struct {
-	S       *search.Searcher
-	F       *fetch.Fetcher
-	Votes   *feedback.Ranker // nil: voting disabled
-	Summary *Summarizer
-	BaseURL string // public URL, used for OpenSearch; derived from request if empty
-	shell   []byte // dist/index.html
+	S            *search.Searcher
+	F            *fetch.Fetcher
+	Votes        *feedback.Ranker // nil: voting disabled
+	Summary      *Summarizer
+	SummaryFetch *fetch.Fetcher // optional stricter fetcher for automatic page fetches
+	Archive      *archive.Store
+	BaseURL      string // public URL, used for OpenSearch; derived from request if empty
+	shell        []byte // dist/index.html
 }
 
 func New(s *search.Searcher, f *fetch.Fetcher, baseURL string) *Server {
@@ -50,12 +53,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.app)
 	mux.HandleFunc("GET /search", s.search)
 	mux.HandleFunc("GET /read", s.read)
+	mux.HandleFunc("GET /archive", s.app)
+	mux.HandleFunc("GET /api/archive", s.apiArchive)
+	mux.HandleFunc("GET /api/archive/{id}", s.apiArchiveEntry)
 	mux.HandleFunc("GET /suggest", s.suggest)
 	mux.HandleFunc("GET /favicon", s.favicon)
 	mux.HandleFunc("GET /img", s.img)
 	mux.HandleFunc("GET /opensearch.xml", s.opensearch)
 	mux.HandleFunc("GET /api/config", s.apiConfig)
 	mux.HandleFunc("GET /api/search", s.apiSearch)
+	mux.HandleFunc("POST /api/summary/follow-up", s.apiSummaryFollowUp)
 	mux.HandleFunc("GET /api/scrape", s.apiScrape)
 	mux.HandleFunc("GET /api/map", s.apiMap)
 	mux.HandleFunc("GET /api/crawl", s.apiCrawl)
@@ -316,6 +323,7 @@ type summaryFrame struct {
 	Text    string `json:"summary"`
 	Pending bool   `json:"summary_pending"`
 	Failed  bool   `json:"summary_failed,omitempty"`
+	Session string `json:"summary_session,omitempty"`
 }
 
 func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
@@ -367,7 +375,12 @@ func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
 		if final == nil || writeErr != nil || r.Context().Err() != nil {
 			return
 		}
-		text, err := s.Summary.summarize(r.Context(), q, final.Results, func(text string) error {
+		sources := s.summarySources(r.Context(), final.Results)
+		if r.Context().Err() != nil || !s.Summary.Enabled.Load() {
+			writeFrame(summaryFrame{Done: true})
+			return
+		}
+		text, session, err := s.Summary.summarize(r.Context(), q, sources, func(text string) error {
 			if !s.Summary.Enabled.Load() {
 				return context.Canceled
 			}
@@ -376,7 +389,7 @@ func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
 		if r.Context().Err() == nil {
 			out := summaryFrame{Done: true}
 			if s.Summary.Enabled.Load() {
-				out.Text, out.Failed = text, err != nil
+				out.Text, out.Failed, out.Session = text, err != nil, session
 			}
 			writeFrame(out)
 		}

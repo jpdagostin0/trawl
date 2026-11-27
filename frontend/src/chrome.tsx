@@ -62,6 +62,7 @@ export function GBar({ cat = "general", q = "", onTips }: { cat?: string; q?: st
         </NavDropdown>
       </nav>
       <nav className="gbar-right">
+        {cat === "archive" ? <b>Archive</b> : <Link to="/archive">Archive</Link>} |{" "}
         <a href="/opensearch.xml">Add to browser</a> | <a href="/api/search?q=hello">JSON API</a>
       </nav>
     </div>

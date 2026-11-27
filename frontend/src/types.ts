@@ -56,6 +56,7 @@ export interface SearchResponse {
   summary?: string;
   summary_pending?: boolean;
   summary_failed?: boolean;
+  summary_session?: string;
 }
 
 // Summary frames replace only the growing summary after ranking is done.
@@ -64,7 +65,28 @@ export type SearchFrame = SearchResponse | {
   summary: string;
   summary_pending: boolean;
   summary_failed?: boolean;
+  summary_session?: string;
 };
+
+export interface ArchiveEntry {
+  id: string;
+  url: string;
+  title: string;
+  fetched_at: string;
+  size_bytes: number;
+}
+
+export interface ArchiveList {
+  entries: ArchiveEntry[];
+  used_bytes: number;
+  limit_bytes: number;
+  has_more: boolean;
+}
+
+export interface ArchiveArticle {
+  entry: ArchiveEntry;
+  markdown: string;
+}
 
 // fetch.Page, as returned by /api/scrape?html=1
 export interface Page {

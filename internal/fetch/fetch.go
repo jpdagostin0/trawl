@@ -117,43 +117,72 @@ func validate(raw string) (*url.URL, error) {
 	return u, nil
 }
 
-func (f *Fetcher) get(ctx context.Context, u string) (*http.Response, error) {
+func get(ctx context.Context, client *http.Client, u, agent string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", engine.UserAgent)
+	req.Header.Set("User-Agent", agent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml;q=0.9,text/plain;q=0.8,*/*;q=0.5")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.7")
-	return f.client.Do(req)
+	return client.Do(req)
 }
 
 // Scrape fetches a URL and extracts the main content as markdown + sanitized HTML.
 func (f *Fetcher) Scrape(ctx context.Context, raw string) (*Page, error) {
+	return f.scrape(ctx, raw, false)
+}
+
+// ScrapeAllowed follows robots.txt at every hop. Use it for automatic fetches.
+func (f *Fetcher) ScrapeAllowed(ctx context.Context, raw string) (*Page, error) {
+	return f.scrape(ctx, raw, true)
+}
+
+func (f *Fetcher) scrape(ctx context.Context, raw string, obeyRobots bool) (*Page, error) {
 	u, err := validate(raw)
 	if err != nil {
 		return nil, err
 	}
-	if p, ok := f.cache.Get(u.String()); ok {
+	client, agent, key := f.client, engine.UserAgent, u.String()
+	if obeyRobots {
+		if u.User != nil || !f.Allowed(ctx, u) {
+			return nil, ErrRobots
+		}
+		client, agent, key = f.robotsClient(), robotsAgent, "robots:"+key
+	}
+	if p, ok := f.cache.Get(key); ok {
+		if obeyRobots {
+			final, err := url.Parse(p.URL)
+			if err != nil || !f.Allowed(ctx, final) {
+				return nil, ErrRobots
+			}
+		}
 		return p, nil
 	}
-	resp, err := f.get(ctx, u.String())
+	resp, err := get(ctx, client, u.String(), agent)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 || (obeyRobots && resp.StatusCode == http.StatusPartialContent) {
 		return nil, fmt.Errorf("%s returned HTTP %d", u.Host, resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	limit := int64(maxBody)
+	if obeyRobots {
+		limit++
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit))
 	if err != nil {
 		return nil, err
+	}
+	if len(body) > maxBody {
+		return nil, errors.New("article exceeds fetch size limit")
 	}
 	final := resp.Request.URL // after redirects
 	ct, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if ct == "text/plain" || ct == "text/markdown" {
 		txt := string(body)
-		return f.store(u, &Page{URL: final.String(), Title: final.Path, Markdown: txt, Text: txt,
+		return f.store(key, &Page{URL: final.String(), Title: final.Path, Markdown: txt, Text: txt,
 			HTML: "<pre>" + bluemonday.StrictPolicy().Sanitize(txt) + "</pre>"}), nil
 	}
 	if ct != "" && ct != "text/html" && ct != "application/xhtml+xml" {
@@ -187,12 +216,12 @@ func (f *Fetcher) Scrape(ctx context.Context, raw string) (*Page, error) {
 	if p.Title == "" {
 		p.Title = final.Host
 	}
-	return f.store(u, p), nil
+	return f.store(key, p), nil
 }
 
-func (f *Fetcher) store(u *url.URL, p *Page) *Page {
+func (f *Fetcher) store(key string, p *Page) *Page {
 	p.FetchedAt = time.Now().UTC()
-	f.cache.Add(u.String(), p)
+	f.cache.Add(key, p)
 	return p
 }
 
@@ -221,23 +250,6 @@ func extractLinks(body []byte, base *url.URL) []string {
 		}
 	})
 	return out
-}
-
-// Allowed checks robots.txt for our user agent (fails open if robots.txt is unreachable).
-func (f *Fetcher) Allowed(ctx context.Context, u *url.URL) bool {
-	origin := u.Scheme + "://" + u.Host
-	rd, ok := f.robots.Get(origin)
-	if !ok {
-		rd = &robotstxt.RobotsData{}
-		if resp, err := f.get(ctx, origin+"/robots.txt"); err == nil {
-			if parsed, err := robotstxt.FromResponse(resp); err == nil {
-				rd = parsed
-			}
-			resp.Body.Close()
-		}
-		f.robots.Add(origin, rd)
-	}
-	return rd.TestAgent(u.Path, "trawl")
 }
 
 // Map returns same-site links discovered on a page (firecrawl /map equivalent).
@@ -272,9 +284,9 @@ func (f *Fetcher) Crawl(ctx context.Context, raw string, limit, depth int) ([]*P
 		prefix = prefix[:i+1]
 	}
 	var (
-		mu      sync.Mutex
-		seen    = map[string]bool{start.String(): true}
-		pages   []*Page
+		mu       sync.Mutex
+		seen     = map[string]bool{start.String(): true}
+		pages    []*Page
 		frontier = []string{start.String()}
 	)
 	for d := 0; d <= depth && len(frontier) > 0; d++ {
@@ -289,11 +301,7 @@ func (f *Fetcher) Crawl(ctx context.Context, raw string, limit, depth int) ([]*P
 					return nil
 				}
 				mu.Unlock()
-				lu, _ := url.Parse(link)
-				if !f.Allowed(gctx, lu) {
-					return nil
-				}
-				p, err := f.Scrape(gctx, link)
+				p, err := f.ScrapeAllowed(gctx, link)
 				if err != nil {
 					return nil // skip broken pages, keep crawling
 				}

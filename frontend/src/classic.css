@@ -485,6 +485,23 @@ h3.r {
 .g.down {
   opacity: 0.6;
 }
+.archive-main {
+  margin: 1.5em auto;
+  padding: 0 1em;
+  max-width: 52rem;
+}
+.archive-main .r {
+  font-size: 16px;
+  margin: 0 0 0.25em;
+}
+.archive-article {
+  margin: 1em 0;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+.archive-article h1 {
+  font-size: 1.5em;
+}
 .search-summary {
   margin: 1em 0;
   padding: 0.75em 1em;
@@ -495,7 +512,7 @@ h3.r {
   margin: 0 0 0.4em;
   font-size: 16px;
 }
-.search-summary > p {
+.search-summary > div > p {
   margin: 0;
 }
 .summary-content {
@@ -503,6 +520,26 @@ h3.r {
 }
 .summary-content > :last-child {
   margin-bottom: 0;
+}
+.summary-follow-up {
+  border-top: 1px solid var(--bar);
+  margin-top: 0.75em;
+  padding-top: 0.75em;
+}
+.follow-up-turn {
+  margin-bottom: 0.75em;
+}
+.follow-up-turn > p {
+  margin-bottom: 0.3em;
+}
+.follow-up-fields {
+  display: flex;
+  gap: 0.5em;
+  margin-top: 0.3em;
+}
+.follow-up-fields input {
+  flex: 1;
+  min-width: 0;
 }
 @media (hover: none) {
   .votes {

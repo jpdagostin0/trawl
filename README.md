@@ -71,12 +71,24 @@ look. No Python, Redis or Playwright at runtime; Node is only needed to rebuild 
     docker build -t trawl . && docker run -p 8088:8088 trawl
 
 Enable “Local search summaries” in the tray to summarize the top five results
-on the first page of text searches. Results appear immediately; the summary
-streams above them as Ollama generates it. Summaries support Markdown and LaTeX
-math (`$...$` and `$$...$$`).
+on the first page of text searches. Results appear immediately while trawl
+fetches the readable article text, checking `robots.txt` before every request and
+redirect. When fetching is blocked or fails, the summary uses the result snippet.
+The model receives up to 12 KB of readable text per article to bound its context;
+the summary streams above the results and supports Markdown and LaTeX math.
 This uses `lfm3:1.7b` through Ollama (`OLLAMA_HOST`); `-summary-model`
-(`TRAWL_SUMMARY_MODEL`) overrides the model. The checkbox starts off unless
+(`TRAWL_SUMMARY_MODEL`) overrides the model. Once a summary completes, you can
+ask follow-up questions using the same sources and recent conversation. This
+context stays in memory for up to 30 minutes. The checkbox starts off unless
 `-summary` or `TRAWL_SUMMARY=1` is set.
+
+The Archive tab shows locally saved, readable Markdown snapshots of pages
+successfully fetched for summaries. It keeps one snapshot per URL, including the
+full extracted article even when the model input was shortened. The archive
+uses `~/.local/share/trawl/archive` (or `$XDG_DATA_HOME/trawl/archive`), with a
+4 GB cap on stored files. It purges the oldest snapshots first. Override the
+path via `-archive-dir` / `TRAWL_ARCHIVE_DIR`, or set `-archive-dir=` to turn
+storage off. Anyone who can access this trawl instance can read its archive.
 
 Desktop build with a tray icon (shows that trawl is running and its port, with
 Reload, which restarts the server with fresh caches, and Quit):
@@ -109,6 +121,9 @@ into `internal/web/dist`, which is committed and embedded with `go:embed`, so
     GET /api/search?q=...&scrape=3          # also returns markdown for the top 3 results
     GET /api/search?q=...&stream=1          # NDJSON: snapshots as engines answer and personalization settles; last has "done": true
     GET /api/search?q=...&stream=1&summary=1 # optional summary-only frames follow the ranked snapshots
+    POST /api/summary/follow-up           # {"session":"<summary_session>","question":"..."}; streamed answer
+    GET /api/archive?offset=0             # snapshots and archive usage
+    GET /api/archive/{id}                  # saved Markdown and source metadata
     GET /api/scrape?url=...[&html=1][&links=1]
     GET /api/map?url=...                    # same-site links on a page
     GET /api/crawl?url=...&limit=10&depth=2 # bounded BFS under the start path, respects robots.txt
