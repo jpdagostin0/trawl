@@ -316,7 +316,26 @@ func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
 	if e := qv.Get("engines"); e != "" {
 		only = strings.Split(e, ",")
 	}
-	resp := s.S.Search(r.Context(), engine.Query{Text: q, Page: max(page, 1), Lang: "en"}, parseCategory(qv.Get("category")), only)
+	query := engine.Query{Text: q, Page: max(page, 1), Lang: "en"}
+	readerURL := ""
+	if looksLikeURL(q) {
+		readerURL = q
+	}
+	// stream=1: newline-delimited JSON, one merged snapshot per engine that answers,
+	// starting with the first; the last line has "done": true.
+	if qv.Get("stream") == "1" {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Accel-Buffering", "no")
+		rc := http.NewResponseController(w)
+		enc := json.NewEncoder(w)
+		s.S.Stream(r.Context(), query, parseCategory(qv.Get("category")), only, func(resp *search.Response) {
+			enc.Encode(searchResponse{Response: resp, ReaderURL: readerURL})
+			rc.Flush()
+		})
+		return
+	}
+	resp := s.S.Search(r.Context(), query, parseCategory(qv.Get("category")), only)
 	// scrape=N: also extract markdown for the top N results, in parallel
 	if n, _ := strconv.Atoi(qv.Get("scrape")); n > 0 {
 		n = min(n, 10, len(resp.Results))
@@ -340,11 +359,7 @@ func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"search": resp, "scraped": pages})
 		return
 	}
-	out := searchResponse{Response: resp}
-	if looksLikeURL(q) {
-		out.ReaderURL = q
-	}
-	writeJSON(w, 200, out)
+	writeJSON(w, 200, searchResponse{Response: resp, ReaderURL: readerURL})
 }
 
 func (s *Server) apiScrape(w http.ResponseWriter, r *http.Request) {

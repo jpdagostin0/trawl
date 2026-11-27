@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { Col, Form, Modal, Row } from "react-bootstrap";
 import QuickAnswer from "./QuickAnswer.jsx";
 import { BlueBar, Footer, GBar, Logo, Notice, Pager, SearchForm, TipsModal } from "./chrome.jsx";
-import { catLabel, displayURL, fileType, Highlight, host, proxied, relTime, searchURL, useConfig, useJSON } from "./util.jsx";
+import { catLabel, displayURL, fileType, Highlight, host, proxied, relTime, searchURL, useConfig, useNDJSON } from "./util.jsx";
 
 export default function Results() {
   const [params] = useSearchParams();
@@ -19,13 +19,15 @@ export default function Results() {
     if (!q) nav("/", { replace: true });
   }, [q, nav]);
 
-  const api = q ? `/api/search?${new URLSearchParams({ q, category: cat, page })}` : null;
-  const { data, error, loading } = useJSON(api);
+  // Streamed: the first engine's results show right away, the rest merge in as they answer.
+  const api = q ? `/api/search?${new URLSearchParams({ q, category: cat, page, stream: 1 })}` : null;
+  const { data, error } = useNDJSON(api);
   const r = data && data.query === q && data.category === cat && data.page === page ? data : null;
   document.title = `${q} - trawl ${cat === "general" ? "Search" : catLabel[cat] ?? "Search"}`;
 
   const results = r?.results ?? [];
-  const failed = r && !results.length && r.engines.length > 0 && r.engines.every((e) => e.error);
+  const pending = !error && (!r || !r.done);
+  const failed = r?.done && !results.length && r.engines.length > 0 && r.engines.every((e) => e.error);
   const first = r ? (page - 1) * results.length + 1 : 0;
 
   const href = (p) => searchURL(q, cat, p);
@@ -39,12 +41,18 @@ export default function Results() {
         <SearchForm q={q} cat={cat} variant="top" onTips={() => setTips(true)} />
       </header>
       <BlueBar label={catLabel[cat] ?? cat}>
-        {loading && !r ? (
+        {pending && !results.length ? (
           <Notice>Loading...</Notice>
         ) : r && results.length ? (
           <>
             Results <b>{first}</b> - <b>{first + results.length - 1}</b> for <b>{q}</b>. (<b>{(r.took_ms / 1000).toFixed(2)}</b> seconds)
             {r.cached && " (cached)"}
+            {pending && (
+              <>
+                {" "}
+                <Notice>Loading more...</Notice>
+              </>
+            )}
           </>
         ) : null}
       </BlueBar>
@@ -59,7 +67,7 @@ export default function Results() {
           {r && <QuickAnswer answer={r.answer} infobox={r.infobox} q={q} />}
           {error && <Sorry>trawl couldn&apos;t complete your search: {error.message}</Sorry>}
           {failed && <Sorry>every engine failed for this query. They may be rate-limiting this server; please try again in a minute.</Sorry>}
-          {r && !results.length && !failed && <NoMatch q={q} />}
+          {r?.done && !results.length && !failed && <NoMatch q={q} />}
           {r && results.length > 0 && cat === "images" && <ImageResults q={q} results={results} />}
           {r && results.length > 0 && cat === "news" && <NewsResults q={q} results={results} />}
           {r && results.length > 0 && cat !== "images" && cat !== "news" && <WebResults q={q} results={results} cat={cat} />}
@@ -67,7 +75,7 @@ export default function Results() {
       </Row>
 
       {r && results.length > 0 && <Pager page={page} hasNext={results.length >= 5} href={href} />}
-      {r && <EngineLine engines={r.engines} />}
+      {r && <EngineLine engines={r.engines} pending={pending} />}
       <div className="bsf">
         <SearchForm q={q} cat={cat} variant="bottom" />
         <div className="bsf-links">
@@ -388,7 +396,7 @@ function NewsThumb({ r }) {
   );
 }
 
-function EngineLine({ engines }) {
+function EngineLine({ engines, pending }) {
   const [open, setOpen] = useState(false);
   if (!engines?.length) return null;
   const ok = engines.filter((e) => !e.error).length;
@@ -397,7 +405,7 @@ function EngineLine({ engines }) {
       <a href="#engines" onClick={(e) => (e.preventDefault(), setOpen(!open))}>
         {open ? "Hide" : "Show"} engine details
       </a>{" "}
-      ({ok} of {engines.length} engines answered)
+      ({ok} of {engines.length} engines answered{pending && ", more still searching..."})
       {open && (
         <table>
           <tbody>

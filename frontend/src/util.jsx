@@ -28,6 +28,37 @@ export function useJSON(url) {
   return state;
 }
 
+// Like useJSON, for newline-delimited JSON: data is replaced by each line as it arrives.
+export function useNDJSON(url) {
+  const [state, setState] = useState({ data: null, error: null, loading: !!url });
+  useEffect(() => {
+    if (!url) return;
+    const ctrl = new AbortController();
+    setState((s) => ({ ...s, loading: true, error: null }));
+    (async () => {
+      const r = await fetch(url, { signal: ctrl.signal });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || `${r.status} ${r.statusText}`);
+      }
+      const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += value;
+        const lines = buf.split("\n");
+        buf = lines.pop();
+        const last = lines.filter((l) => l.trim()).pop();
+        if (last) setState({ data: JSON.parse(last), error: null, loading: true });
+      }
+      setState((s) => ({ ...s, loading: false }));
+    })().catch((error) => error.name !== "AbortError" && setState({ data: null, error, loading: false }));
+    return () => ctrl.abort();
+  }, [url]);
+  return state;
+}
+
 let configPromise;
 const fallbackConfig = { categories: [{ id: "general", engines: [] }], bangs: {}, tab_bangs: {} };
 export function useConfig() {

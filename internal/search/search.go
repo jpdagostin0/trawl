@@ -36,6 +36,7 @@ type Response struct {
 	Engines  []EngineStatus  `json:"engines"`
 	TookMS   int64           `json:"took_ms"`
 	Cached   bool            `json:"cached"`
+	Done     bool            `json:"done"` // false for the partial snapshots Stream sends while engines are still answering
 }
 
 type Searcher struct {
@@ -94,14 +95,25 @@ func (s *Searcher) record(name string, err error) {
 	}
 }
 
-// Search runs the query on every engine in the category. If only is non-empty,
-// it restricts to those engine names.
+// Search runs the query on every engine in the category and returns the merged
+// results once all of them have answered. If only is non-empty, it restricts to
+// those engine names.
 func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Category, only []string) *Response {
+	var last *Response
+	s.Stream(ctx, q, cat, only, func(r *Response) { last = r })
+	return last
+}
+
+// Stream is Search, but calls emit with a merged snapshot as soon as the first
+// engine answers and again each time another engine (or the infobox) comes in.
+// The last snapshot has Done set. emit is called from the calling goroutine.
+func (s *Searcher) Stream(ctx context.Context, q engine.Query, cat engine.Category, only []string, emit func(*Response)) {
 	key := fmt.Sprintf("%s\x00%s\x00%d\x00%s\x00%s", cat, q.Text, q.Page, q.Lang, strings.Join(only, ","))
 	if r, ok := s.cache.Get(key); ok {
 		cp := *r
 		cp.Cached = true
-		return &cp
+		emit(&cp)
+		return
 	}
 	start := time.Now()
 	var ans *answer.Answer
@@ -111,30 +123,27 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	type out struct {
-		eng     engine.Engine
-		results []engine.Result
-		status  EngineStatus
+	// Each goroutine sends exactly one event; nil out means an infobox event.
+	type event struct {
+		out     *out
+		infobox *engine.Infobox
 	}
 	var (
-		wg      sync.WaitGroup
-		mu      sync.Mutex
 		outs    []out
 		infobox *engine.Infobox
+		running int
 	)
+	events := make(chan event)
 	for _, e := range s.engines {
 		if e.Category() != cat || (len(only) > 0 && !slices.Contains(only, e.Name())) {
 			continue
 		}
 		if s.suspended(e.Name()) {
-			mu.Lock()
 			outs = append(outs, out{eng: e, status: EngineStatus{Name: e.Name(), Skipped: true, Error: "suspended after errors"}})
-			mu.Unlock()
 			continue
 		}
-		wg.Add(1)
+		running++
 		go func(e engine.Engine) {
-			defer wg.Done()
 			t0 := time.Now()
 			res, err := e.Search(ctx, q)
 			st := EngineStatus{Name: e.Name(), Results: len(res), TookMS: time.Since(t0).Milliseconds()}
@@ -142,25 +151,54 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 				st.Error = err.Error()
 			}
 			s.record(e.Name(), err)
-			mu.Lock()
-			outs = append(outs, out{e, res, st})
-			mu.Unlock()
+			events <- event{out: &out{e, res, st}}
 		}(e)
 		if ip, ok := e.(engine.InfoboxProvider); ok && q.Page == 1 && ans == nil {
-			wg.Add(1)
+			running++
 			go func() {
-				defer wg.Done()
-				if ib, err := ip.Infobox(ctx, q); err == nil && ib != nil {
-					mu.Lock()
-					infobox = ib
-					mu.Unlock()
+				ib, err := ip.Infobox(ctx, q)
+				if err != nil {
+					ib = nil
 				}
+				events <- event{infobox: ib}
 			}()
 		}
 	}
-	wg.Wait()
 
-	// Weighted reciprocal-rank fusion: results several engines agree on float up.
+	snapshot := func(done bool) *Response {
+		return &Response{Query: q.Text, Category: cat, Page: q.Page, Results: merge(outs, q), Answer: ans, Infobox: infobox,
+			Engines: statuses(outs), TookMS: time.Since(start).Milliseconds(), Done: done}
+	}
+	answered := false
+	for ; running > 0; running-- {
+		ev := <-events
+		if ev.out != nil {
+			outs = append(outs, *ev.out)
+			answered = true
+		} else if ev.infobox != nil {
+			infobox = ev.infobox
+		} else {
+			continue
+		}
+		if answered && running > 1 {
+			emit(snapshot(false))
+		}
+	}
+	resp := snapshot(true)
+	if len(resp.Results) > 0 {
+		s.cache.Add(key, resp)
+	}
+	emit(resp)
+}
+
+type out struct {
+	eng     engine.Engine
+	results []engine.Result
+	status  EngineStatus
+}
+
+// merge does weighted reciprocal-rank fusion: results several engines agree on float up.
+func merge(outs []out, q engine.Query) []engine.Result {
 	merged := map[string]*engine.Result{}
 	var order []string
 	for _, o := range outs {
@@ -214,19 +252,16 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 		results = append(results, *r)
 	}
 	sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	return results
+}
 
-	statuses := make([]EngineStatus, 0, len(outs))
+func statuses(outs []out) []EngineStatus {
+	st := make([]EngineStatus, 0, len(outs))
 	for _, o := range outs {
-		statuses = append(statuses, o.status)
+		st = append(st, o.status)
 	}
-	sort.Slice(statuses, func(i, j int) bool { return statuses[i].Name < statuses[j].Name })
-
-	resp := &Response{Query: q.Text, Category: cat, Page: q.Page, Results: results, Answer: ans, Infobox: infobox,
-		Engines: statuses, TookMS: time.Since(start).Milliseconds()}
-	if len(results) > 0 {
-		s.cache.Add(key, resp)
-	}
-	return resp
+	sort.Slice(st, func(i, j int) bool { return st[i].Name < st[j].Name })
+	return st
 }
 
 // snippetJunk is markup and escaped newlines some upstreams leak into snippets.

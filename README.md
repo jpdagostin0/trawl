@@ -77,6 +77,7 @@ into `internal/web/dist`, which is committed and embedded with `go:embed`, so
 
     GET /api/search?q=...&category=general|images|news|code|forums&page=1&engines=bing,duckduckgo
     GET /api/search?q=...&scrape=3          # also returns markdown for the top 3 results
+    GET /api/search?q=...&stream=1          # NDJSON: a merged snapshot as each engine answers; last has "done": true
     GET /api/scrape?url=...[&html=1][&links=1]
     GET /api/map?url=...                    # same-site links on a page
     GET /api/crawl?url=...&limit=10&depth=2 # bounded BFS under the start path, respects robots.txt
