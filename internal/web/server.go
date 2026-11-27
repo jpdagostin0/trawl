@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jpdagostin0/trawl/internal/engine"
+	"github.com/jpdagostin0/trawl/internal/feedback"
 	"github.com/jpdagostin0/trawl/internal/fetch"
 	"github.com/jpdagostin0/trawl/internal/search"
 )
@@ -28,8 +29,9 @@ var distFS embed.FS
 type Server struct {
 	S       *search.Searcher
 	F       *fetch.Fetcher
-	BaseURL string // public URL, used for OpenSearch; derived from request if empty
-	shell   []byte // dist/index.html
+	Votes   *feedback.Ranker // nil: voting disabled
+	BaseURL string           // public URL, used for OpenSearch; derived from request if empty
+	shell   []byte           // dist/index.html
 }
 
 func New(s *search.Searcher, f *fetch.Fetcher, baseURL string) *Server {
@@ -56,6 +58,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/scrape", s.apiScrape)
 	mux.HandleFunc("GET /api/map", s.apiMap)
 	mux.HandleFunc("GET /api/crawl", s.apiCrawl)
+	mux.HandleFunc("POST /api/vote", s.apiVote)
+	mux.HandleFunc("GET /api/votes", s.apiVotes)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok") })
 	return secure(logging(mux))
 }
@@ -295,7 +299,7 @@ func (s *Server) apiConfig(w http.ResponseWriter, r *http.Request) {
 		catBangNames[name] = string(c)
 	}
 	w.Header().Set("Cache-Control", "public, max-age=300")
-	writeJSON(w, 200, map[string]any{"categories": cats, "bangs": bangSites, "tab_bangs": catBangNames})
+	writeJSON(w, 200, map[string]any{"categories": cats, "bangs": bangSites, "tab_bangs": catBangNames, "voting": s.Votes != nil})
 }
 
 // searchResponse adds UI hints to the search response.

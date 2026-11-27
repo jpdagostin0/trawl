@@ -44,8 +44,18 @@ type Searcher struct {
 	timeout time.Duration
 	cache   *lru.LRU[string, *Response]
 
+	// Rerank, if set, personalizes every response after the cache, so votes
+	// take effect immediately even on cached queries.
+	Rerank Reranker
+
 	mu      sync.Mutex
 	breaker map[string]*breaker
+}
+
+// Reranker adjusts merged results in place (scores and order).
+type Reranker interface {
+	Prepare(q string) // called when a search starts; must not block
+	Rerank(q engine.Query, cat engine.Category, results []engine.Result)
 }
 
 // breaker suspends an engine after consecutive failures, like SearXNG's suspended_time,
@@ -108,6 +118,16 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 // engine answers and again each time another engine (or the infobox) comes in.
 // The last snapshot has Done set. emit is called from the calling goroutine.
 func (s *Searcher) Stream(ctx context.Context, q engine.Query, cat engine.Category, only []string, emit func(*Response)) {
+	if s.Rerank != nil {
+		s.Rerank.Prepare(q.Text)
+		raw := emit
+		emit = func(r *Response) {
+			cp := *r
+			cp.Results = slices.Clone(r.Results) // r may be the cached copy
+			s.Rerank.Rerank(q, cat, cp.Results)
+			raw(&cp)
+		}
+	}
 	key := fmt.Sprintf("%s\x00%s\x00%d\x00%s\x00%s", cat, q.Text, q.Page, q.Lang, strings.Join(only, ","))
 	if r, ok := s.cache.Get(key); ok {
 		cp := *r
@@ -270,6 +290,9 @@ var snippetJunk = strings.NewReplacer(`\r`, " ", `\n`, " ", "<br>", " ", "<br/>"
 func tidySnippet(s string) string {
 	return strings.Join(strings.Fields(snippetJunk.Replace(s)), " ")
 }
+
+// Key is the dedupe key results are merged on; feedback matches votes by it.
+func Key(raw string) string { return normalize(raw) }
 
 // normalize builds a dedupe key: scheme-less, www-less, no fragment, no tracking
 // params (via CleanURL).

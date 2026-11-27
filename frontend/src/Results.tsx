@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { Col, Form, Modal, Row } from "react-bootstrap";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 import QuickAnswer from "./QuickAnswer";
 import { BlueBar, Footer, GBar, Logo, Notice, Pager, SearchForm, TipsModal } from "./chrome";
 import { catLabel, displayURL, fileType, Highlight, host, proxied, relTime, searchURL, useConfig, useNDJSON } from "./util";
+import { PersonalNote, useVotes, VoteButtons, type VoteCtx } from "./Votes";
 import type { EngineStatus, Result, SearchResponse } from "./types";
 
 export default function Results() {
   const [params] = useSearchParams();
-  const { categories } = useConfig();
+  const { categories, voting } = useConfig();
   const q = (params.get("q") || "").trim();
   const c = params.get("c") || "general";
   const cat = categories.some((x) => x.id === c) || c === "general" ? c : "general";
@@ -20,8 +22,10 @@ export default function Results() {
     if (!q) nav("/", { replace: true });
   }, [q, nav]);
 
+  // rev re-requests the (server-cached) results after a vote so they come back re-ranked.
+  const [rev, setRev] = useState(0);
   // Streamed: the first engine's results show right away, the rest merge in as they answer.
-  const api = q ? `/api/search?${new URLSearchParams({ q, category: cat, page: String(page), stream: "1" })}` : null;
+  const api = q ? `/api/search?${new URLSearchParams({ q, category: cat, page: String(page), stream: "1", ...(rev ? { v: String(rev) } : {}) })}` : null;
   const { data, error } = useNDJSON<SearchResponse>(api);
   const r = data && data.query === q && data.category === cat && data.page === page ? data : null;
   document.title = `${q} - trawl ${cat === "general" ? "Search" : catLabel[cat] ?? "Search"}`;
@@ -30,6 +34,7 @@ export default function Results() {
   const pending = !error && (!r || !r.done);
   const failed = r?.done && !results.length && r.engines.length > 0 && r.engines.every((e) => e.error);
   const first = r ? (page - 1) * results.length + 1 : 0;
+  const votes = useVotes(q, cat, first, !!voting, !pending, () => setRev((n) => n + 1));
 
   const href = (p: number) => searchURL(q, cat, p);
   const sub = cat === "general" ? undefined : cat;
@@ -70,8 +75,8 @@ export default function Results() {
           {failed && <Sorry>every engine failed for this query. They may be rate-limiting this server; please try again in a minute.</Sorry>}
           {r?.done && !results.length && !failed && <NoMatch q={q} />}
           {r && results.length > 0 && cat === "images" && <ImageResults q={q} results={results} />}
-          {r && results.length > 0 && cat === "news" && <NewsResults q={q} results={results} />}
-          {r && results.length > 0 && cat !== "images" && cat !== "news" && <WebResults q={q} results={results} cat={cat} />}
+          {r && results.length > 0 && cat === "news" && <NewsResults q={q} results={results} v={votes} />}
+          {r && results.length > 0 && cat !== "images" && cat !== "news" && <WebResults q={q} results={results} cat={cat} v={votes} />}
         </Col>
       </Row>
 
@@ -180,13 +185,14 @@ function useOpen(results: Result[]) {
   );
 }
 
-function WebResults({ q, results, cat }: { q: string; results: Result[]; cat: string }) {
+function WebResults({ q, results, cat, v }: { q: string; results: Result[]; cat: string; v: VoteCtx }) {
   const open = useOpen(results);
   const sel = useKeyNav(results.length, open);
+  const [list] = useAutoAnimate<HTMLOListElement>({ duration: 200 }); // results slide into place on re-rank
   return (
-    <ol className="res">
+    <ol className="res" ref={list}>
       {results.map((r, i) => (
-        <li key={r.url} className={`g${i === sel ? " sel" : ""}`} data-i={i}>
+        <li key={r.url} className={`g${i === sel ? " sel" : ""}${v.dirOf(r) < 0 ? " down" : ""}`} data-i={i}>
           {i === sel && <span className="sel-arrow">&#9658;</span>}
           {cat === "videos" && r.thumbnail && (
             <a href={r.url} rel="noreferrer noopener" className="vthumb">
@@ -197,6 +203,7 @@ function WebResults({ q, results, cat }: { q: string; results: Result[]; cat: st
             <a href={r.url} rel="noreferrer noopener">
               <Highlight text={r.title || r.url} q={q} />
             </a>
+            <VoteButtons r={r} i={i} v={v} />
           </h3>
           <div className="s">
             {r.meta && <span className="meta">{r.meta} - </span>}
@@ -211,6 +218,7 @@ function WebResults({ q, results, cat }: { q: string; results: Result[]; cat: st
                 Archived
               </a>
               <span className="engs"> - {r.engines.join(", ")}</span>
+              <PersonalNote r={r} v={v} />
             </span>
           </div>
         </li>
@@ -336,11 +344,12 @@ function ImageFrame({ r, onHide }: { r: Result | null; onHide: () => void }) {
   );
 }
 
-function NewsResults({ q, results }: { q: string; results: Result[] }) {
+function NewsResults({ q, results, v }: { q: string; results: Result[]; v: VoteCtx }) {
   const [byDate, setByDate] = useState(false);
   const list = byDate ? [...results].sort((a, b) => (b.published || "").localeCompare(a.published || "")) : results;
   const open = useOpen(list);
   const sel = useKeyNav(list.length, open);
+  const [box] = useAutoAnimate<HTMLDivElement>({ duration: 200 });
   return (
     <>
       <div className="nsort">
@@ -360,15 +369,16 @@ function NewsResults({ q, results }: { q: string; results: Result[] }) {
           </>
         )}
       </div>
-      <div className="res news">
+      <div className="res news" ref={box}>
         {list.map((r, i) => (
-          <div key={r.url} className={`g n${i === sel ? " sel" : ""}`} data-i={i}>
+          <div key={r.url} className={`g n${i === sel ? " sel" : ""}${v.dirOf(r) < 0 ? " down" : ""}`} data-i={i}>
             {i === sel && <span className="sel-arrow">&#9658;</span>}
             {r.thumbnail && <NewsThumb r={r} />}
             <h3 className="r">
               <a href={r.url} rel="noreferrer noopener">
                 <Highlight text={r.title} q={q} />
               </a>
+              <VoteButtons r={r} i={i} v={v} />
             </h3>
             <div className="nsrc">
               <span className="src">{r.source || host(r.url)}</span>
@@ -381,6 +391,7 @@ function NewsResults({ q, results }: { q: string; results: Result[] }) {
                 <Link to={readerHref(r.url)}>Reader</Link>
                 {" - "}
                 <Link to={searchURL(r.title, "news")}>Related articles &raquo;</Link>
+                <PersonalNote r={r} v={v} />
               </span>
             </div>
           </div>

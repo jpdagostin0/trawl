@@ -48,6 +48,10 @@ type Result struct {
 	Published string   `json:"published,omitempty"` // RFC 3339
 	Engines   []string `json:"engines"`
 	Score     float64  `json:"score"`
+	// Set by feedback re-ranking: the user's vote on this result for this exact
+	// query, and log2 of the score multiplier from all their votes.
+	Vote     int     `json:"vote,omitempty"`
+	Personal float64 `json:"personal,omitempty"`
 }
 
 // Infobox is a "quick answer" panel (Wikipedia summary).

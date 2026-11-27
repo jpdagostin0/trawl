@@ -1,7 +1,7 @@
 # trawl
 
 A private metasearch engine with a built-in reader, for humans. Think SearXNG and
-Firecrawl's scrape/crawl/map in one static Go binary, wearing the classic 2008 Google
+Firecrawl's scrape/crawl/map in one Go binary, wearing the classic 2008 Google
 look. No Python, Redis or Playwright at runtime; Node is only needed to rebuild the UI.
 
 ## Features
@@ -18,6 +18,23 @@ look. No Python, Redis or Playwright at runtime; Node is only needed to rebuild 
   Suggest dropdown, I'm Feeling Lucky, the blue results bar, and a "Trawwwwwl" pager.
   Images get the thumbnail grid with a size filter and a full-size frame. News gets
   source/age lines and a relevance or date sort.
+- Your ranking: the ▲/▼ next to each web or news result moves it up or down, and
+  the list re-sorts as soon as you click (SearchWiki-style). Votes are stored in
+  DuckDB (`~/.local/share/trawl/trawl.duckdb`), together with embeddings of the
+  voted query and page from a local Ollama model (`embeddinggemma` by default).
+  Each search is matched against them with vector search in SQL
+  (`list_cosine_similarity`). Every vote affects every search, at full strength on
+  the search you voted on and half strength on unrelated ones:
+  - Votes on the same page: 4x (or 1/4x) on the voted search, 2x (1/2x) elsewhere.
+  - Votes on other pages of the same site: a small nudge.
+  - Votes on other pages whose title and snippet embed close to this result's: up
+    to about 2.8x, so pages like ones you upvoted rise on searches you never voted on.
+
+  The `votes` table keeps every click with the query, URL, title, snippet, engines
+  and the position it was shown at, so it can be mined or used to train a reranker.
+  Only voted queries and pages are stored. Other searches are embedded in memory
+  and never written. Without Ollama, ranking falls back to word overlap and the
+  exact page/site matches. Delete the file to forget everything.
 - Circuit breaker: an engine that gets rate-limited or captcha'd is paused for a
   while, so it doesn't slow down every search (same idea as SearXNG suspension).
 - Reader view: one click turns any result into a clean, readable article (Mozilla
@@ -64,7 +81,9 @@ default, and the Docker image) trawl runs headless and stops on SIGINT/SIGTERM.
 Flags and env vars: `-addr` (`TRAWL_ADDR`), `-base-url` (`TRAWL_BASE_URL`),
 `-disable` (`TRAWL_DISABLE`), `-timeout` (upstream timeout per search, default 3s),
 `-allow-private` (`TRAWL_ALLOW_PRIVATE=1`, lets the reader fetch LAN/localhost; for
-trusted use only).
+trusted use only), `-db` (`TRAWL_DB`, DuckDB file for votes and vectors; empty disables voting),
+`-embed-model` (`TRAWL_EMBED_MODEL`, Ollama embedding model reached via `OLLAMA_HOST`;
+empty disables embeddings).
 
 ## Frontend
 
@@ -84,7 +103,10 @@ into `internal/web/dist`, which is committed and embedded with `go:embed`, so
     GET /api/map?url=...                    # same-site links on a page
     GET /api/crawl?url=...&limit=10&depth=2 # bounded BFS under the start path, respects robots.txt
     GET /read?url=...&format=md             # raw markdown
-    GET /api/config                         # tabs that have engines, bangs
+    GET /api/config                         # tabs that have engines, bangs, whether voting is on
+    POST /api/vote   {"query","url","dir":1|-1|0,"category","title","snippet","engines","position"}
+                                            # JSON only (blocks cross-site form posts); dir 0 clears
+    GET /api/votes                          # current votes, newest first
     GET /img?u=...                          # image proxy
 
 The fetcher refuses loopback, private, and link-local addresses. The check runs when
@@ -94,6 +116,7 @@ the connection is made, so redirects and DNS rebinding can't get around it.
 
     internal/engine   upstream backends (HTML scrapers + JSON APIs)
     internal/search   fan-out, RRF merge, dedupe, circuit breaker, LRU cache
+    internal/feedback votes + vectors in DuckDB, Ollama embeddings, vote-based re-ranking
     internal/fetch    safe HTTP client, readability -> markdown, map, crawl, robots.txt
     internal/web      net/http handlers, embedded frontend build, bangs, favicon/image proxy
     frontend          React + Bootstrap UI (classic look)

@@ -13,6 +13,8 @@ export interface Result {
   published?: string;
   engines: string[];
   score: number;
+  vote?: -1 | 1; // your vote on this result for this exact query
+  personal?: number; // log2 of the score multiplier from your votes
 }
 
 // engine.Infobox
@@ -77,4 +79,5 @@ export interface Config {
   categories: { id: string; engines: string[] }[];
   bangs: Record<string, string>;
   tab_bangs: Record<string, string>;
+  voting?: boolean;
 }
