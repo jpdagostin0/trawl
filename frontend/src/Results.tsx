@@ -34,7 +34,7 @@ export default function Results() {
   const pending = !error && (!r || !r.done);
   const failed = r?.done && !results.length && r.engines.length > 0 && r.engines.every((e) => e.error);
   const first = r ? (page - 1) * results.length + 1 : 0;
-  const votes = useVotes(q, cat, first, !!voting, !pending, () => setRev((n) => n + 1));
+  const votes = useVotes(q, cat, first, !!voting, () => setRev((n) => n + 1));
 
   const href = (p: number) => searchURL(q, cat, p);
   const sub = cat === "general" ? undefined : cat;
@@ -130,7 +130,7 @@ function useKeyNav(count: number, open: (i: number, key: OpenKey) => void) {
   useEffect(() => setSel(-1), [count]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement).tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target as HTMLElement).tagName)) return;
       if (document.querySelector(".modal.show")) return;
       switch (e.key) {
         case "j":

@@ -33,8 +33,9 @@ look. No Python, Redis or Playwright at runtime; Node is only needed to rebuild 
   The `votes` table keeps every click with the query, URL, title, snippet, engines
   and the position it was shown at, so it can be mined or used to train a reranker.
   Only voted queries and pages are stored. Other searches are embedded in memory
-  and never written. Without Ollama, ranking falls back to word overlap and the
-  exact page/site matches. Delete the file to forget everything.
+  and never written. Results stream immediately; if vectors are still being
+  computed, the stream waits up to five seconds for a final personalized order.
+  Without Ollama, ranking falls back to word overlap and exact page/site matches. Delete the file to forget everything.
 - Circuit breaker: an engine that gets rate-limited or captcha'd is paused for a
   while, so it doesn't slow down every search (same idea as SearXNG suspension).
 - Reader view: one click turns any result into a clean, readable article (Mozilla
@@ -98,7 +99,7 @@ into `internal/web/dist`, which is committed and embedded with `go:embed`, so
 
     GET /api/search?q=...&category=general|images|news|code|forums&page=1&engines=bing,duckduckgo
     GET /api/search?q=...&scrape=3          # also returns markdown for the top 3 results
-    GET /api/search?q=...&stream=1          # NDJSON: a merged snapshot as each engine answers; last has "done": true
+    GET /api/search?q=...&stream=1          # NDJSON: snapshots as engines answer and personalization settles; last has "done": true
     GET /api/scrape?url=...[&html=1][&links=1]
     GET /api/map?url=...                    # same-site links on a page
     GET /api/crawl?url=...&limit=10&depth=2 # bounded BFS under the start path, respects robots.txt

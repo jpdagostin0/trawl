@@ -12,11 +12,15 @@ type pageMatch struct {
 }
 
 func (s *Store) putQueryVec(model, q string, vec []float32) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, err := s.db.Exec(`INSERT INTO query_vecs VALUES (?, ?, ?) ON CONFLICT (model, q) DO UPDATE SET vec = excluded.vec`, model, q, vec)
 	return err
 }
 
 func (s *Store) putPageVec(model, key string, vec []float32) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, err := s.db.Exec(`INSERT INTO page_vecs VALUES (?, ?, ?) ON CONFLICT (model, key) DO UPDATE SET vec = excluded.vec`, model, key, vec)
 	return err
 }

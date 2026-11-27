@@ -14,9 +14,7 @@ import (
 )
 
 // Embedder turns queries and result pages into vectors with an Ollama
-// embedding model. Searches never wait for it: Query and Pages return only
-// what's cached and fetch misses in the background, so the first snapshot of a
-// search may rank without vectors and later ones with them.
+// embedding model. The search stream shows results while vectors are computed.
 type Embedder struct {
 	Model  string
 	client *api.Client
@@ -62,31 +60,34 @@ func (e *Embedder) pageText(title, snippet string) string {
 	return "title: " + title + " | text: " + snippet
 }
 
-// Query returns q's vector if cached, else starts fetching it.
-func (e *Embedder) Query(q string) ([]float32, bool) {
-	if v, ok := e.queries.Get(q); ok {
-		return v, true
+// pending starts only missing work for the final set of merged results.
+func (e *Embedder) pending(q string, docs []pageDoc) <-chan struct{} {
+	var work sync.WaitGroup
+	waiting := false
+	if _, ok := e.queries.Get(q); !ok {
+		waiting = true
+		work.Go(func() { e.fetch(e.queries, []string{q}, []string{e.queryText(q)}) })
 	}
-	go e.fetch(e.queries, []string{q}, []string{e.queryText(q)})
-	return nil, false
-}
-
-// Pages returns the cached vectors of docs and starts fetching the rest.
-func (e *Embedder) Pages(docs []pageDoc) map[string][]float32 {
-	out := make(map[string][]float32, len(docs))
 	var ids, texts []string
 	for _, d := range docs {
-		if v, ok := e.pages.Get(d.key); ok {
-			out[d.key] = v
-		} else {
+		if _, ok := e.pages.Get(d.key); !ok {
 			ids = append(ids, d.key)
 			texts = append(texts, e.pageText(d.title, d.snippet))
 		}
 	}
 	if len(ids) > 0 {
-		go e.fetch(e.pages, ids, texts)
+		waiting = true
+		work.Go(func() { e.fetch(e.pages, ids, texts) })
 	}
-	return out
+	if !waiting {
+		return nil
+	}
+	done := make(chan struct{})
+	go func() {
+		work.Wait()
+		close(done)
+	}()
+	return done
 }
 
 // fetch embeds texts and caches them under ids. Identical concurrent batches
@@ -98,7 +99,11 @@ func (e *Embedder) fetch(cache *lru.LRU[string, []float32], ids, texts []string)
 	if down {
 		return nil, errDown
 	}
-	v, err, _ := e.group.Do(strings.Join(ids, "\x00"), func() (any, error) {
+	prefix := "query:"
+	if cache == e.pages {
+		prefix = "page:"
+	}
+	v, err, _ := e.group.Do(prefix+strings.Join(ids, "\x00"), func() (any, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // covers a cold model load
 		defer cancel()
 		resp, err := e.client.Embed(ctx, &api.EmbedRequest{Model: e.Model, Input: texts})

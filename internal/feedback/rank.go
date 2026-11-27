@@ -36,6 +36,8 @@ type Ranker struct {
 
 	mu           sync.Mutex
 	lastBackfill time.Time
+	indexing     chan struct{}
+	indexJobs    int
 }
 
 // Vote records v and embeds its query and page into DuckDB in the background.
@@ -44,7 +46,13 @@ func (r *Ranker) Vote(v Vote) error {
 		return err
 	}
 	if r.Emb != nil && v.Dir != 0 {
-		go r.embed([]string{normQuery(v.Query)}, []pageDoc{{r.Store.key(v.URL), v.Title, v.Snippet}})
+		r.mu.Lock()
+		finish := r.beginIndexingLocked()
+		r.mu.Unlock()
+		go func() {
+			defer finish()
+			r.embed([]string{normQuery(v.Query)}, []pageDoc{{r.Store.key(v.URL), v.Title, v.Snippet}})
+		}()
 	}
 	return nil
 }
@@ -57,12 +65,14 @@ func (r *Ranker) Backfill() {
 		return
 	}
 	r.mu.Lock()
-	if time.Since(r.lastBackfill) < 5*time.Minute {
+	if r.indexing != nil || time.Since(r.lastBackfill) < 5*time.Minute {
 		r.mu.Unlock()
 		return
 	}
 	r.lastBackfill = time.Now()
+	finish := r.beginIndexingLocked()
 	r.mu.Unlock()
+	defer finish()
 	qs, pages, err := r.Store.missingVecs(r.Emb.Model)
 	if err != nil {
 		log.Printf("feedback: %v", err)
@@ -70,6 +80,24 @@ func (r *Ranker) Backfill() {
 	}
 	if len(qs)+len(pages) > 0 {
 		r.embed(qs, pages)
+	}
+}
+
+// beginIndexingLocked registers work before it is launched so a search can
+// wait for the voted vectors as well as its own vectors.
+func (r *Ranker) beginIndexingLocked() func() {
+	if r.indexing == nil {
+		r.indexing = make(chan struct{})
+	}
+	r.indexJobs++
+	return func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		r.indexJobs--
+		if r.indexJobs == 0 {
+			close(r.indexing)
+			r.indexing = nil
+		}
 	}
 }
 
@@ -108,8 +136,36 @@ func (r *Ranker) Prepare(q string) {
 	if r.Emb == nil || len(r.Store.snapshot()) == 0 {
 		return
 	}
-	r.Emb.Query(normQuery(q))
+	r.Emb.pending(normQuery(q), nil)
 	go r.Backfill()
+}
+
+// Pending starts embedding any uncached results before the last snapshot.
+func (r *Ranker) Pending(q string, results []engine.Result) <-chan struct{} {
+	if r.Emb == nil || len(results) == 0 || len(r.Store.snapshot()) == 0 {
+		return nil
+	}
+	docs := make([]pageDoc, len(results))
+	for i, res := range results {
+		docs[i] = pageDoc{r.Store.key(res.URL), res.Title, res.Snippet}
+	}
+	resultsReady := r.Emb.pending(normQuery(q), docs)
+	r.mu.Lock()
+	votesReady := r.indexing
+	r.mu.Unlock()
+	if votesReady == nil {
+		return resultsReady
+	}
+	if resultsReady == nil {
+		return votesReady
+	}
+	done := make(chan struct{})
+	go func() {
+		<-resultsReady
+		<-votesReady
+		close(done)
+	}()
+	return done
 }
 
 // Rerank multiplies each result's score by 2^adj and re-sorts. Every vote counts
@@ -180,7 +236,7 @@ func (r *Ranker) querySims(nq string, votes []*vote) map[string]float64 {
 	if r.Emb == nil {
 		return out
 	}
-	qv, ok := r.Emb.Query(nq)
+	qv, ok := r.Emb.queries.Get(nq)
 	if !ok {
 		return out
 	}
@@ -200,18 +256,16 @@ func (r *Ranker) nearPages(results []engine.Result) map[string][]pageMatch {
 	if r.Emb == nil {
 		return nil
 	}
-	docs := make([]pageDoc, len(results))
-	for i, res := range results {
-		docs[i] = pageDoc{r.Store.key(res.URL), res.Title, res.Snippet}
+	keys := make([]string, 0, len(results))
+	vs := make([][]float32, 0, len(results))
+	for _, res := range results {
+		key := r.Store.key(res.URL)
+		if v, ok := r.Emb.pages.Get(key); ok {
+			keys, vs = append(keys, key), append(vs, v)
+		}
 	}
-	vecs := r.Emb.Pages(docs)
-	if len(vecs) == 0 {
+	if len(keys) == 0 {
 		return nil
-	}
-	keys := make([]string, 0, len(vecs))
-	vs := make([][]float32, 0, len(vecs))
-	for k, v := range vecs {
-		keys, vs = append(keys, k), append(vs, v)
 	}
 	near, err := r.Store.similarPages(r.Emb.Model, keys, vs, pageSim)
 	if err != nil {

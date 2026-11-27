@@ -54,7 +54,8 @@ type Searcher struct {
 
 // Reranker adjusts merged results in place (scores and order).
 type Reranker interface {
-	Prepare(q string) // called when a search starts; must not block
+	Prepare(q string)                                          // called when a search starts; must not block
+	Pending(q string, results []engine.Result) <-chan struct{} // nil if ready; otherwise closed when ranking inputs settle
 	Rerank(q engine.Query, cat engine.Category, results []engine.Result)
 }
 
@@ -119,13 +120,29 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 // The last snapshot has Done set. emit is called from the calling goroutine.
 func (s *Searcher) Stream(ctx context.Context, q engine.Query, cat engine.Category, only []string, emit func(*Response)) {
 	if s.Rerank != nil {
+		requestCtx := ctx
 		s.Rerank.Prepare(q.Text)
 		raw := emit
-		emit = func(r *Response) {
+		publish := func(r *Response, done bool) {
 			cp := *r
+			cp.Done = done
 			cp.Results = slices.Clone(r.Results) // r may be the cached copy
 			s.Rerank.Rerank(q, cat, cp.Results)
 			raw(&cp)
+		}
+		emit = func(r *Response) {
+			if r.Done && requestCtx.Err() == nil {
+				if pending := s.Rerank.Pending(q.Text, r.Results); pending != nil {
+					publish(r, false)
+					wait, cancel := context.WithTimeout(requestCtx, 5*time.Second)
+					defer cancel()
+					select {
+					case <-pending:
+					case <-wait.Done():
+					}
+				}
+			}
+			publish(r, r.Done)
 		}
 	}
 	key := fmt.Sprintf("%s\x00%s\x00%d\x00%s\x00%s", cat, q.Text, q.Page, q.Lang, strings.Join(only, ","))

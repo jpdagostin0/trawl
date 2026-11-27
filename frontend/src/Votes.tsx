@@ -1,6 +1,5 @@
-// SearchWiki-style result voting: move a result up or down for this search.
-// Votes also nudge similar searches and other pages on the same site.
-import { useCallback, useEffect, useRef, useState } from "react";
+// A vote changes ranking across searches, not just the current list.
+import { useCallback, useEffect, useState } from "react";
 import type { Result } from "./types";
 
 export type Dir = -1 | 0 | 1;
@@ -11,19 +10,16 @@ export interface VoteCtx {
   dirOf: (r: Result) => Dir;
 }
 
-// Votes show immediately (optimistic); once saved, refresh() re-fetches the
-// results so they come back re-ranked. While the search is still streaming the
-// remaining snapshots are re-ranked server-side anyway, so no refresh is needed.
-export function useVotes(q: string, category: string, first: number, enabled: boolean, done: boolean, refresh: () => void): VoteCtx {
+// Refresh after saving even during streaming: the last snapshot might already
+// be in flight and contain the old ranking.
+export function useVotes(q: string, category: string, first: number, enabled: boolean, refresh: () => void): VoteCtx {
   const [local, setLocal] = useState<Record<string, Dir>>({});
   useEffect(() => setLocal({}), [q, category]);
-  const doneRef = useRef(done);
-  doneRef.current = done;
   const vote = useCallback(
     (r: Result, position: number, dir: Dir) => {
       setLocal((m) => ({ ...m, [r.url]: dir }));
       postVote(q, category, r, first - 1 + position, dir)
-        .then(() => doneRef.current && refresh())
+        .then(refresh)
         .catch(() =>
           setLocal((m) => {
             const { [r.url]: _, ...rest } = m;
@@ -73,7 +69,7 @@ export function VoteButtons({ r, i, v }: { r: Result; i: number; v: VoteCtx }) {
 export function PersonalNote({ r, v }: { r: Result; v: VoteCtx }) {
   if (!v.enabled || !r.personal || v.dirOf(r)) return null;
   return (
-    <span className={`personal${r.personal < 0 ? " lower" : ""}`} title={`score x${Math.pow(2, r.personal).toFixed(2)} from your votes on similar searches or this site`}>
+    <span className={`personal${r.personal < 0 ? " lower" : ""}`} title={`score x${Math.pow(2, r.personal).toFixed(2)} from your past votes`}>
       {" - "}
       {r.personal > 0 ? "ranked higher" : "ranked lower"} by your votes
     </span>
