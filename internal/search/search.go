@@ -26,14 +26,14 @@ type EngineStatus struct {
 }
 
 type Response struct {
-	Query    string                `json:"query"`
-	Category engine.Category       `json:"category"`
-	Page     int                   `json:"page"`
-	Results  []engine.Result       `json:"results"`
-	Infobox  *engine.Infobox       `json:"infobox,omitempty"`
-	Engines  []EngineStatus        `json:"engines"`
-	TookMS   int64                 `json:"took_ms"`
-	Cached   bool                  `json:"cached"`
+	Query    string          `json:"query"`
+	Category engine.Category `json:"category"`
+	Page     int             `json:"page"`
+	Results  []engine.Result `json:"results"`
+	Infobox  *engine.Infobox `json:"infobox,omitempty"`
+	Engines  []EngineStatus  `json:"engines"`
+	TookMS   int64           `json:"took_ms"`
+	Cached   bool            `json:"cached"`
 }
 
 type Searcher struct {
@@ -159,6 +159,8 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 	var order []string
 	for _, o := range outs {
 		for rank, r := range o.results {
+			r.URL = CleanURL(r.URL)
+			r.Snippet = tidySnippet(r.Snippet)
 			k := normalize(r.URL)
 			if k == "" {
 				continue
@@ -173,10 +175,14 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 				if m.Meta == "" {
 					m.Meta = r.Meta
 				}
+				for _, f := range [][2]*string{{&m.Thumbnail, &r.Thumbnail}, {&m.Image, &r.Image}, {&m.Resolution, &r.Resolution}, {&m.Source, &r.Source}, {&m.Published, &r.Published}} {
+					if *f[0] == "" {
+						*f[0] = *f[1]
+					}
+				}
 				continue
 			}
 			r := r
-			r.URL = CleanURL(r.URL)
 			r.Score = sc
 			r.Engines = []string{o.eng.Name()}
 			merged[k] = &r
@@ -217,46 +223,25 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 	return resp
 }
 
-var trackingParams = map[string]bool{"fbclid": true, "gclid": true, "msclkid": true, "ref": true, "ref_src": true, "mc_cid": true, "mc_eid": true}
+// snippetJunk is markup and escaped newlines some upstreams leak into snippets.
+var snippetJunk = strings.NewReplacer(`\r`, " ", `\n`, " ", "<br>", " ", "<br/>", " ", "<br />", " ", "\r", " ", "\n", " ")
 
-// normalize builds a dedupe key: scheme-less, www-less, no fragment, no tracking params.
+func tidySnippet(s string) string {
+	return strings.Join(strings.Fields(snippetJunk.Replace(s)), " ")
+}
+
+// normalize builds a dedupe key: scheme-less, www-less, no fragment, no tracking
+// params (via CleanURL).
 func normalize(raw string) string {
-	u, err := url.Parse(raw)
+	u, err := url.Parse(CleanURL(raw))
 	if err != nil || u.Host == "" {
 		return ""
 	}
 	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 	host = strings.TrimPrefix(host, "m.")
-	q := u.Query()
-	for k := range q {
-		if strings.HasPrefix(k, "utm_") || trackingParams[k] {
-			q.Del(k)
-		}
-	}
-	path := strings.TrimSuffix(u.EscapedPath(), "/")
-	key := host + path
-	if enc := q.Encode(); enc != "" {
-		key += "?" + enc
+	key := host + strings.TrimSuffix(u.EscapedPath(), "/")
+	if u.RawQuery != "" {
+		key += "?" + u.RawQuery
 	}
 	return key
-}
-
-// CleanURL strips tracking params from a result URL before showing it.
-func CleanURL(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return raw
-	}
-	q := u.Query()
-	changed := false
-	for k := range q {
-		if strings.HasPrefix(k, "utm_") || trackingParams[k] {
-			q.Del(k)
-			changed = true
-		}
-	}
-	if changed {
-		u.RawQuery = q.Encode()
-	}
-	return u.String()
 }

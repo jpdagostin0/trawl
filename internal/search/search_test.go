@@ -25,3 +25,22 @@ func TestCleanURL(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestCleanURLClearURLsRules(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://www.google.com/url?q=https://example.com/a%3Fb%3D1&sa=U&ved=2ah": "https://example.com/a?b=1",
+		"https://www.youtube.com/watch?v=abc&feature=share&si=xyz":                "https://www.youtube.com/watch?v=abc",
+		"https://example.com/post?id=5&utm_source=x&fbclid=abc#intro":             "https://example.com/post?id=5#intro",
+		"https://en.wikipedia.org/wiki/Go_(programming_language)":                 "https://en.wikipedia.org/wiki/Go_(programming_language)",
+	} {
+		if got := CleanURL(in); got != want {
+			t.Errorf("CleanURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestTidySnippet(t *testing.T) {
+	if got := tidySnippet(`Hello!\r<br>\r<br>Lyrics  Hi`); got != "Hello! Lyrics Hi" {
+		t.Errorf("got %q", got)
+	}
+}
