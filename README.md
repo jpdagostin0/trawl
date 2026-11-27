@@ -24,7 +24,12 @@ look. No Python, Redis or Playwright at runtime; Node is only needed to rebuild 
   Readability port), presented like the old "cached page" banner. Paste a URL into the
   search box to read it directly. You can change the font size, and copy or download
   the page as Markdown.
-- Quick answers: a Wikipedia infobox for entity queries.
+- Quick answers: the old Google calculator onebox above the results. Math
+  (`5 + 5`, `2^10`, `sqrt(2) * pi`, `what is 12*12`) is evaluated with
+  [expr](https://github.com/expr-lang/expr), restricted to arithmetic and math
+  functions; unit conversions (`10 km in miles`, `72 f to c`, `how many feet in a mile`)
+  use [go-units](https://github.com/bcicen/go-units). Other queries get a Wikipedia
+  summary in the same spot.
 - Bangs: `!g`, `!w`, `!gh`, `!yt`, `!r`, `!so`, `!aw`, `!mdn`, `!pkg`, ... go to the
   external site. `!i`, `!n`, `!code`, and `!forums` switch tabs without leaving trawl.
 - Keyboard: `/` focuses search, `j`/`k` move, `o`/Enter opens, `O` opens in a new
@@ -44,6 +49,15 @@ look. No Python, Redis or Playwright at runtime; Node is only needed to rebuild 
     ./trawl -addr :8088 -base-url https://search.example.com -disable mojeek
 
     docker build -t trawl . && docker run -p 8088:8088 trawl
+
+Desktop build with a tray icon (shows that trawl is running and its port, with
+Reload, which restarts the server with fresh caches, and Quit):
+
+    go build -tags tray -ldflags="-s -w" -o trawl .
+
+On Linux the tray uses StatusNotifierItem over D-Bus (KDE, GNOME with the AppIndicator
+extension, waybar's `tray` module, ...) and needs no cgo. Without `-tags tray` (the
+default, and the Docker image) trawl runs headless and stops on SIGINT/SIGTERM.
 
 Flags and env vars: `-addr` (`TRAWL_ADDR`), `-base-url` (`TRAWL_BASE_URL`),
 `-disable` (`TRAWL_DISABLE`), `-timeout` (upstream timeout per search, default 3s),

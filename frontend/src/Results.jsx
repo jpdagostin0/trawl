@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { Col, Form, Modal, Row } from "react-bootstrap";
+import QuickAnswer from "./QuickAnswer.jsx";
 import { BlueBar, Footer, GBar, Logo, Notice, Pager, SearchForm, TipsModal } from "./chrome.jsx";
 import { catLabel, displayURL, fileType, Highlight, host, proxied, relTime, searchURL, useConfig, useJSON } from "./util.jsx";
 
@@ -55,6 +56,7 @@ export default function Results() {
               Open <b>{r.reader_url}</b> in <Link to={`/read?url=${encodeURIComponent(r.reader_url)}`}>Reader view</Link> &raquo;
             </p>
           )}
+          {r && <QuickAnswer answer={r.answer} infobox={r.infobox} q={q} />}
           {error && <Sorry>trawl couldn&apos;t complete your search: {error.message}</Sorry>}
           {failed && <Sorry>every engine failed for this query. They may be rate-limiting this server; please try again in a minute.</Sorry>}
           {r && !results.length && !failed && <NoMatch q={q} />}
@@ -62,11 +64,6 @@ export default function Results() {
           {r && results.length > 0 && cat === "news" && <NewsResults q={q} results={results} />}
           {r && results.length > 0 && cat !== "images" && cat !== "news" && <WebResults q={q} results={results} cat={cat} />}
         </Col>
-        {cat !== "images" && (
-          <Col lg={4} className="rside">
-            {r?.infobox && <Infobox ib={r.infobox} q={q} />}
-          </Col>
-        )}
       </Row>
 
       {r && results.length > 0 && <Pager page={page} hasNext={results.length >= 5} href={href} />}
@@ -388,20 +385,6 @@ function NewsThumb({ r }) {
       <img src={proxied(r.thumbnail)} alt="" loading="lazy" onError={() => setFailed(true)} />
       <span>{r.source || host(r.url)}</span>
     </a>
-  );
-}
-
-function Infobox({ ib, q }) {
-  return (
-    <div className="onebox">
-      <h2 className="ob-h">Quick answer</h2>
-      {ib.image && <img src={proxied(ib.image)} alt="" className="ob-img" loading="lazy" />}
-      <a href={ib.url} rel="noreferrer" className="ob-t">
-        <Highlight text={ib.title} q={q} />
-      </a>
-      <div className="ob-x">{ib.extract.length > 420 ? ib.extract.slice(0, 417).replace(/\s+\S*$/, "") + " ..." : ib.extract}</div>
-      <cite>{host(ib.url)}</cite> - <Link to={readerHref(ib.url)}>Reader</Link>
-    </div>
   );
 }
 

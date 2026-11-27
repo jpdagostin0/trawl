@@ -14,6 +14,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
 
+	"github.com/jpdagostin0/trawl/internal/answer"
 	"github.com/jpdagostin0/trawl/internal/engine"
 )
 
@@ -30,6 +31,7 @@ type Response struct {
 	Category engine.Category `json:"category"`
 	Page     int             `json:"page"`
 	Results  []engine.Result `json:"results"`
+	Answer   *answer.Answer  `json:"answer,omitempty"` // calculator / unit conversion
 	Infobox  *engine.Infobox `json:"infobox,omitempty"`
 	Engines  []EngineStatus  `json:"engines"`
 	TookMS   int64           `json:"took_ms"`
@@ -102,6 +104,10 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 		return &cp
 	}
 	start := time.Now()
+	var ans *answer.Answer
+	if cat == engine.General && q.Page == 1 {
+		ans = answer.For(q.Text)
+	}
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
@@ -140,7 +146,7 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 			outs = append(outs, out{e, res, st})
 			mu.Unlock()
 		}(e)
-		if ip, ok := e.(engine.InfoboxProvider); ok && q.Page == 1 {
+		if ip, ok := e.(engine.InfoboxProvider); ok && q.Page == 1 && ans == nil {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -215,7 +221,7 @@ func (s *Searcher) Search(ctx context.Context, q engine.Query, cat engine.Catego
 	}
 	sort.Slice(statuses, func(i, j int) bool { return statuses[i].Name < statuses[j].Name })
 
-	resp := &Response{Query: q.Text, Category: cat, Page: q.Page, Results: results, Infobox: infobox,
+	resp := &Response{Query: q.Text, Category: cat, Page: q.Page, Results: results, Answer: ans, Infobox: infobox,
 		Engines: statuses, TookMS: time.Since(start).Milliseconds()}
 	if len(results) > 0 {
 		s.cache.Add(key, resp)

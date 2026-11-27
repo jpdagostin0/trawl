@@ -400,10 +400,6 @@ cite {
     flex: 0 0 auto;
     width: min(660px, 58%);
   }
-  .rbody > .rside {
-    flex: 0 1 380px;
-    width: auto;
-  }
   .cat-images .rbody > .rmain {
     width: 100%;
   }
@@ -489,36 +485,43 @@ h3.r {
   padding-left: 2.5em;
 }
 
-/* right column */
-.rside {
-  padding: 0 8px 0 12px;
-}
+/* onebox: the calculator line / Wikipedia summary above the results */
 .onebox {
-  margin-top: 1em;
-  padding-left: 12px;
-  border-left: 1px solid var(--gbar-line);
+  margin: 1em 0 1.2em;
+  border-collapse: collapse;
   font-size: 13px;
-  overflow: hidden;
-  max-width: 26em;
 }
-.ob-h {
-  font-size: 11px;
+.onebox td {
+  padding: 0;
+  vertical-align: top;
+}
+.onebox .ob-icon {
+  padding-right: 8px;
+}
+.onebox.calc .ob-icon {
+  vertical-align: middle;
+}
+.onebox.calc h2.r {
+  font-size: 18px;
   font-weight: normal;
-  color: #676767;
-  margin: 0 0 6px;
+  margin: 0;
 }
-.ob-img {
-  float: left;
+.ob-more {
+  font-size: 11px;
+  color: var(--gray);
+}
+.onebox.wiki .ob-icon img {
   max-width: 80px;
   max-height: 100px;
-  margin: 2px 8px 4px 0;
   border: 1px solid #ccc;
 }
-.ob-t {
-  font-size: 16px;
+.onebox.wiki .s {
+  line-height: 1.24;
+  max-width: 40em;
 }
-.ob-x {
-  margin: 2px 0;
+.ob-src {
+  font-size: 13px;
+  color: var(--gray);
 }
 
 /* pager: T r a w w w w l */
@@ -885,18 +888,6 @@ h3.r {
   .sf-home .sf-links {
     position: static;
     display: none;
-  }
-}
-@media (max-width: 991.98px) {
-  .rside {
-    order: -1;
-    padding: 0 8px 0 20px;
-  }
-  .onebox {
-    max-width: none;
-  }
-  .ob-h {
-    text-align: left;
   }
 }
 @media (max-width: 720px) {
