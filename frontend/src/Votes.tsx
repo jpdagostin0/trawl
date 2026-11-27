@@ -64,14 +64,3 @@ export function VoteButtons({ r, i, v }: { r: Result; i: number; v: VoteCtx }) {
     </span>
   );
 }
-
-// "Ranked higher by your votes" for results moved by votes on other searches or pages.
-export function PersonalNote({ r, v }: { r: Result; v: VoteCtx }) {
-  if (!v.enabled || !r.personal || v.dirOf(r)) return null;
-  return (
-    <span className={`personal${r.personal < 0 ? " lower" : ""}`} title={`score x${Math.pow(2, r.personal).toFixed(2)} from your past votes`}>
-      {" - "}
-      {r.personal > 0 ? "ranked higher" : "ranked lower"} by your votes
-    </span>
-  );
-}

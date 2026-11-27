@@ -30,8 +30,9 @@ type Server struct {
 	S       *search.Searcher
 	F       *fetch.Fetcher
 	Votes   *feedback.Ranker // nil: voting disabled
-	BaseURL string           // public URL, used for OpenSearch; derived from request if empty
-	shell   []byte           // dist/index.html
+	Summary *Summarizer
+	BaseURL string // public URL, used for OpenSearch; derived from request if empty
+	shell   []byte // dist/index.html
 }
 
 func New(s *search.Searcher, f *fetch.Fetcher, baseURL string) *Server {
@@ -305,7 +306,16 @@ func (s *Server) apiConfig(w http.ResponseWriter, r *http.Request) {
 // searchResponse adds UI hints to the search response.
 type searchResponse struct {
 	*search.Response
-	ReaderURL string `json:"reader_url,omitempty"` // the query is a URL: offer the reader
+	ReaderURL      string `json:"reader_url,omitempty"` // the query is a URL: offer the reader
+	SummaryPending bool   `json:"summary_pending,omitempty"`
+}
+
+// summaryFrame updates only the summary, leaving the last ranked list intact.
+type summaryFrame struct {
+	Done    bool   `json:"done"` // ranking has finished, even during generation
+	Text    string `json:"summary"`
+	Pending bool   `json:"summary_pending"`
+	Failed  bool   `json:"summary_failed,omitempty"`
 }
 
 func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
@@ -333,10 +343,43 @@ func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Accel-Buffering", "no")
 		rc := http.NewResponseController(w)
 		enc := json.NewEncoder(w)
-		s.S.Stream(r.Context(), query, parseCategory(qv.Get("category")), only, func(resp *search.Response) {
-			enc.Encode(searchResponse{Response: resp, ReaderURL: readerURL})
-			rc.Flush()
+		category := parseCategory(qv.Get("category"))
+		withSummary := query.Page == 1 && category != engine.Images && qv.Get("summary") == "1" &&
+			s.Summary != nil && s.Summary.Enabled.Load()
+		var writeErr error
+		writeFrame := func(frame any) error {
+			if writeErr == nil {
+				writeErr = enc.Encode(frame)
+				if writeErr == nil {
+					writeErr = rc.Flush()
+				}
+			}
+			return writeErr
+		}
+		var final *search.Response
+		s.S.Stream(r.Context(), query, category, only, func(resp *search.Response) {
+			pending := withSummary && s.Summary.Enabled.Load() && (!resp.Done || len(resp.Results) > 0)
+			writeFrame(searchResponse{Response: resp, ReaderURL: readerURL, SummaryPending: pending})
+			if resp.Done && pending {
+				final = resp
+			}
 		})
+		if final == nil || writeErr != nil || r.Context().Err() != nil {
+			return
+		}
+		text, err := s.Summary.summarize(r.Context(), q, final.Results, func(text string) error {
+			if !s.Summary.Enabled.Load() {
+				return context.Canceled
+			}
+			return writeFrame(summaryFrame{Done: true, Text: text, Pending: true})
+		})
+		if r.Context().Err() == nil {
+			out := summaryFrame{Done: true}
+			if s.Summary.Enabled.Load() {
+				out.Text, out.Failed = text, err != nil
+			}
+			writeFrame(out)
+		}
 		return
 	}
 	resp := s.S.Search(r.Context(), query, parseCategory(qv.Get("category")), only)

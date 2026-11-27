@@ -14,7 +14,6 @@ export interface Result {
   engines: string[];
   score: number;
   vote?: -1 | 1; // your vote on this result for this exact query
-  personal?: number; // log2 of the score multiplier from your votes
 }
 
 // engine.Infobox
@@ -54,7 +53,18 @@ export interface SearchResponse {
   cached: boolean;
   done: boolean;
   reader_url?: string;
+  summary?: string;
+  summary_pending?: boolean;
+  summary_failed?: boolean;
 }
+
+// Summary frames replace only the growing summary after ranking is done.
+export type SearchFrame = SearchResponse | {
+  done: true;
+  summary: string;
+  summary_pending: boolean;
+  summary_failed?: boolean;
+};
 
 // fetch.Page, as returned by /api/scrape?html=1
 export interface Page {

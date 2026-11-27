@@ -37,13 +37,14 @@ export function useJSON<T>(url: string | null): Fetched<T> {
   return state;
 }
 
-// Like useJSON, for newline-delimited JSON: data is replaced by each line as it arrives.
-export function useNDJSON<T>(url: string | null): Fetched<T> {
+// Fold newline-delimited events in order; frames in one browser read can share a render.
+export function useNDJSON<T, Frame>(url: string | null, merge: (data: T | null, frame: Frame) => T | null): Fetched<T> {
   const [state, setState] = useState<Fetched<T>>({ data: null, error: null, loading: !!url });
   useEffect(() => {
     if (!url) return;
     const ctrl = new AbortController();
     setState((s) => ({ ...s, loading: true, error: null }));
+    let data: T | null = null;
     (async () => {
       const r = await fetch(url, { signal: ctrl.signal });
       if (!r.ok || !r.body) {
@@ -58,13 +59,16 @@ export function useNDJSON<T>(url: string | null): Fetched<T> {
         buf += value;
         const lines = buf.split("\n");
         buf = lines.pop() ?? "";
-        const last = lines.filter((l) => l.trim()).pop();
-        if (last) setState({ data: JSON.parse(last) as T, error: null, loading: true });
+        if (ctrl.signal.aborted) return;
+        for (const line of lines) {
+          if (line.trim()) data = merge(data, JSON.parse(line) as Frame);
+        }
+        if (lines.length) setState({ data, error: null, loading: true });
       }
-      setState((s) => ({ ...s, loading: false }));
-    })().catch((error: Error) => !isAbort(error) && setState({ data: null, error, loading: false }));
+      if (!ctrl.signal.aborted) setState({ data, error: null, loading: false });
+    })().catch((error: Error) => !ctrl.signal.aborted && setState({ data, error, loading: false }));
     return () => ctrl.abort();
-  }, [url]);
+  }, [url, merge]);
   return state;
 }
 

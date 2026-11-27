@@ -70,6 +70,14 @@ look. No Python, Redis or Playwright at runtime; Node is only needed to rebuild 
 
     docker build -t trawl . && docker run -p 8088:8088 trawl
 
+Enable “Local search summaries” in the tray to summarize the top five results
+on the first page of text searches. Results appear immediately; the summary
+streams above them as Ollama generates it. Summaries support Markdown and LaTeX
+math (`$...$` and `$$...$$`).
+This uses `lfm3:1.7b` through Ollama (`OLLAMA_HOST`); `-summary-model`
+(`TRAWL_SUMMARY_MODEL`) overrides the model. The checkbox starts off unless
+`-summary` or `TRAWL_SUMMARY=1` is set.
+
 Desktop build with a tray icon (shows that trawl is running and its port, with
 Reload, which restarts the server with fresh caches, and Quit):
 
@@ -100,6 +108,7 @@ into `internal/web/dist`, which is committed and embedded with `go:embed`, so
     GET /api/search?q=...&category=general|images|news|code|forums&page=1&engines=bing,duckduckgo
     GET /api/search?q=...&scrape=3          # also returns markdown for the top 3 results
     GET /api/search?q=...&stream=1          # NDJSON: snapshots as engines answer and personalization settles; last has "done": true
+    GET /api/search?q=...&stream=1&summary=1 # optional summary-only frames follow the ranked snapshots
     GET /api/scrape?url=...[&html=1][&links=1]
     GET /api/map?url=...                    # same-site links on a page
     GET /api/crawl?url=...&limit=10&depth=2 # bounded BFS under the start path, respects robots.txt

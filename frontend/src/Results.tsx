@@ -3,10 +3,16 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { Col, Form, Modal, Row } from "react-bootstrap";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import QuickAnswer from "./QuickAnswer";
+import SearchSummary from "./SearchSummary";
 import { BlueBar, Footer, GBar, Logo, Notice, Pager, SearchForm, TipsModal } from "./chrome";
 import { catLabel, displayURL, fileType, Highlight, host, proxied, relTime, searchURL, useConfig, useNDJSON } from "./util";
-import { PersonalNote, useVotes, VoteButtons, type VoteCtx } from "./Votes";
-import type { EngineStatus, Result, SearchResponse } from "./types";
+import { useVotes, VoteButtons, type VoteCtx } from "./Votes";
+import type { EngineStatus, Result, SearchFrame, SearchResponse } from "./types";
+
+function mergeSearchFrame(previous: SearchResponse | null, frame: SearchFrame): SearchResponse | null {
+  if ("results" in frame) return frame;
+  return previous && { ...previous, ...frame };
+}
 
 export default function Results() {
   const [params] = useSearchParams();
@@ -25,11 +31,12 @@ export default function Results() {
   // rev re-requests the (server-cached) results after a vote so they come back re-ranked.
   const [rev, setRev] = useState(0);
   // Streamed: the first engine's results show right away, the rest merge in as they answer.
-  const api = q ? `/api/search?${new URLSearchParams({ q, category: cat, page: String(page), stream: "1", ...(rev ? { v: String(rev) } : {}) })}` : null;
-  const { data, error } = useNDJSON<SearchResponse>(api);
+  const api = q ? `/api/search?${new URLSearchParams({ q, category: cat, page: String(page), stream: "1", summary: "1", ...(rev ? { v: String(rev) } : {}) })}` : null;
+  const { data, error, loading } = useNDJSON(api, mergeSearchFrame);
   const r = data && data.query === q && data.category === cat && data.page === page ? data : null;
   document.title = `${q} - trawl ${cat === "general" ? "Search" : catLabel[cat] ?? "Search"}`;
 
+  const summaryResponse = r?.summary_pending && !loading ? { ...r, summary_pending: false, summary_failed: true } : r;
   const results = r?.results ?? [];
   const pending = !error && (!r || !r.done);
   const failed = r?.done && !results.length && r.engines.length > 0 && r.engines.every((e) => e.error);
@@ -65,6 +72,7 @@ export default function Results() {
 
       <Row className="rbody g-0">
         <Col lg={cat === "images" ? 12 : 8} className="rmain">
+          {summaryResponse && <SearchSummary response={summaryResponse} />}
           {r?.reader_url && (
             <p className="readcta">
               Open <b>{r.reader_url}</b> in <Link to={`/read?url=${encodeURIComponent(r.reader_url)}`}>Reader view</Link> &raquo;
@@ -218,7 +226,6 @@ function WebResults({ q, results, cat, v }: { q: string; results: Result[]; cat:
                 Archived
               </a>
               <span className="engs"> - {r.engines.join(", ")}</span>
-              <PersonalNote r={r} v={v} />
             </span>
           </div>
         </li>
@@ -391,7 +398,6 @@ function NewsResults({ q, results, v }: { q: string; results: Result[]; v: VoteC
                 <Link to={readerHref(r.url)}>Reader</Link>
                 {" - "}
                 <Link to={searchURL(r.title, "news")}>Related articles &raquo;</Link>
-                <PersonalNote r={r} v={v} />
               </span>
             </div>
           </div>

@@ -36,10 +36,11 @@ type config struct {
 
 // app owns the running HTTP server so the tray can restart it.
 type app struct {
-	cfg   config
-	votes *feedback.Ranker // opened once: survives tray reloads (DuckDB locks its file)
-	mu    sync.Mutex
-	srv   *http.Server
+	cfg     config
+	votes   *feedback.Ranker // opened once: survives tray reloads (DuckDB locks its file)
+	summary *web.Summarizer
+	mu      sync.Mutex
+	srv     *http.Server
 }
 
 // start builds fresh engines, caches and breakers and starts listening.
@@ -53,6 +54,7 @@ func (a *app) start() error {
 	}
 	srch := search.New(engines, a.cfg.timeout)
 	srv := web.New(srch, fetch.New(a.cfg.allowPrivate), a.cfg.base)
+	srv.Summary = a.summary
 	if a.votes != nil {
 		srch.Rerank, srv.Votes = a.votes, a.votes
 	}
@@ -133,9 +135,17 @@ func main() {
 	flag.BoolVar(&cfg.allowPrivate, "allow-private", os.Getenv("TRAWL_ALLOW_PRIVATE") == "1", "allow reader/scrape to fetch private IPs (trusted local use only)")
 	flag.StringVar(&cfg.db, "db", env("TRAWL_DB", feedback.DefaultPath()), "DuckDB file for result votes and their embeddings; empty disables voting")
 	flag.StringVar(&cfg.embedModel, "embed-model", env("TRAWL_EMBED_MODEL", "embeddinggemma"), "Ollama embedding model for matching votes to similar queries (OLLAMA_HOST); empty uses word overlap only")
+	summaryEnabled := flag.Bool("summary", os.Getenv("TRAWL_SUMMARY") == "1", "enable local Ollama search summaries at startup")
+	summaryModel := flag.String("summary-model", env("TRAWL_SUMMARY_MODEL", "lfm3:1.7b"), "Ollama model for local search summaries (OLLAMA_HOST)")
 	flag.Parse()
 
 	a := &app{cfg: cfg, votes: openVotes(cfg)}
+	if summary, err := web.NewSummarizer(*summaryModel); err != nil {
+		log.Printf("search summaries unavailable: %v", err)
+	} else {
+		summary.Enabled.Store(*summaryEnabled)
+		a.summary = summary
+	}
 	if a.votes != nil {
 		defer a.votes.Store.Close()
 	}

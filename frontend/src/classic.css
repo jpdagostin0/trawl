@@ -485,11 +485,24 @@ h3.r {
 .g.down {
   opacity: 0.6;
 }
-.gl .personal {
-  color: var(--green);
+.search-summary {
+  margin: 1em 0;
+  padding: 0.75em 1em;
+  border: 1px solid var(--bar);
+  font-size: 13px;
 }
-.gl .personal.lower {
-  color: var(--gray);
+.search-summary h2 {
+  margin: 0 0 0.4em;
+  font-size: 16px;
+}
+.search-summary > p {
+  margin: 0;
+}
+.summary-content {
+  overflow-x: auto;
+}
+.summary-content > :last-child {
+  margin-bottom: 0;
 }
 @media (hover: none) {
   .votes {
