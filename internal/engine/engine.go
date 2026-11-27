@@ -17,11 +17,16 @@ type Category string
 
 const (
 	General Category = "general"
+	Images  Category = "images"
+	Videos  Category = "videos"
+	News    Category = "news"
 	Code    Category = "code"
 	Forums  Category = "forums"
+	Science Category = "science"
 )
 
-var Categories = []Category{General, Code, Forums}
+// Categories is the display order of tabs; tabs without engines are hidden.
+var Categories = []Category{General, Images, Videos, News, Code, Forums, Science}
 
 type Query struct {
 	Text string
@@ -34,6 +39,10 @@ type Result struct {
 	Title   string   `json:"title"`
 	Snippet string   `json:"snippet"`
 	Meta    string   `json:"meta,omitempty"` // e.g. "123 points · 45 comments"
+	// Image/video results
+	Thumbnail  string `json:"thumbnail,omitempty"`
+	Image      string `json:"image,omitempty"` // full-size image URL
+	Resolution string `json:"resolution,omitempty"`
 	Engines []string `json:"engines"`
 	Score   float64  `json:"score"`
 }
@@ -104,7 +113,8 @@ func (e ErrBlocked) Error() string { return e.Engine + ": blocked by captcha/bot
 // All returns every built-in engine.
 func All() []Engine {
 	return []Engine{
-		&Bing{}, &DuckDuckGo{}, &Mojeek{}, &Wikipedia{},
+		&Startpage{}, &Bing{}, &DuckDuckGo{}, &Mojeek{}, &Wikipedia{},
+		&BingImages{}, &WikiCommons{},
 		&GitHub{}, &StackOverflow{},
 		&HackerNews{},
 	}
