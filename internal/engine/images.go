@@ -58,8 +58,9 @@ func (*WikiCommons) Category() Category { return Images }
 func (*WikiCommons) Weight() float64    { return 0.7 }
 
 func (e *WikiCommons) Search(ctx context.Context, q Query) ([]Result, error) {
+	offset := (q.Page - 1) * 20
 	v := url.Values{"action": {"query"}, "format": {"json"}, "generator": {"search"}, "gsrsearch": {q.Text + " filetype:bitmap|drawing"},
-		"gsrnamespace": {"6"}, "gsrlimit": {"20"}, "gsroffset": {strconv.Itoa((q.Page - 1) * 20)},
+		"gsrnamespace": {"6"}, "gsrlimit": {"20"}, "gsroffset": {strconv.Itoa(offset)},
 		"prop": {"imageinfo"}, "iiprop": {"url|size"}, "iiurlwidth": {"400"}}
 	var r struct {
 		Query struct {
@@ -82,6 +83,7 @@ func (e *WikiCommons) Search(ctx context.Context, q Query) ([]Result, error) {
 	out := make([]Result, len(r.Query.Pages))
 	n := 0
 	for _, p := range r.Query.Pages {
+		p.Index -= offset // the API's index is absolute across pages
 		if len(p.ImageInfo) == 0 || p.Index < 1 || p.Index > len(out) {
 			continue
 		}

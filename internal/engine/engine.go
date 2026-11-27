@@ -35,16 +35,19 @@ type Query struct {
 }
 
 type Result struct {
-	URL     string   `json:"url"`
-	Title   string   `json:"title"`
-	Snippet string   `json:"snippet"`
-	Meta    string   `json:"meta,omitempty"` // e.g. "123 points · 45 comments"
+	URL     string `json:"url"`
+	Title   string `json:"title"`
+	Snippet string `json:"snippet"`
+	Meta    string `json:"meta,omitempty"` // e.g. "123 points · 45 comments"
 	// Image/video results
 	Thumbnail  string `json:"thumbnail,omitempty"`
 	Image      string `json:"image,omitempty"` // full-size image URL
 	Resolution string `json:"resolution,omitempty"`
-	Engines []string `json:"engines"`
-	Score   float64  `json:"score"`
+	// News results
+	Source    string   `json:"source,omitempty"`    // publisher name
+	Published string   `json:"published,omitempty"` // RFC 3339
+	Engines   []string `json:"engines"`
+	Score     float64  `json:"score"`
 }
 
 // Infobox is a "quick answer" panel (Wikipedia summary).
@@ -115,6 +118,7 @@ func All() []Engine {
 	return []Engine{
 		&Startpage{}, &Bing{}, &DuckDuckGo{}, &Mojeek{}, &Wikipedia{},
 		&BingImages{}, &WikiCommons{},
+		&BingNews{}, &DuckDuckGoNews{},
 		&GitHub{}, &StackOverflow{},
 		&HackerNews{},
 	}
