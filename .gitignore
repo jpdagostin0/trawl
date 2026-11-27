@@ -1,3 +1,4 @@
 trawl
 *.png
 node_modules/
+!assets/*.png
