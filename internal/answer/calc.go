@@ -1,6 +1,7 @@
 package answer
 
 import (
+	"maps"
 	"math"
 	"regexp"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
 	"github.com/expr-lang/expr/parser"
+	"github.com/expr-lang/expr/vm"
 )
 
 // mathEnv is everything a calculator expression may reference.
@@ -31,8 +33,10 @@ var (
 
 // arith rejects everything that isn't plain arithmetic, and records whether
 // the expression actually computes something (so "2024" alone isn't an answer).
+// Identifiers other than mathEnv's are collected in free (variables of an integrand).
 type arith struct {
 	bad, op bool
+	free    map[string]bool
 }
 
 func (v *arith) Visit(n *ast.Node) {
@@ -40,7 +44,11 @@ func (v *arith) Visit(n *ast.Node) {
 	case *ast.IntegerNode, *ast.FloatNode:
 	case *ast.IdentifierNode:
 		if _, ok := mathEnv[n.Value]; !ok {
-			v.bad = true
+			if v.free == nil {
+				v.bad = true
+			} else {
+				v.free[n.Value] = true
+			}
 		}
 	case *ast.UnaryNode:
 		if n.Operator != "-" && n.Operator != "+" {
@@ -78,35 +86,62 @@ func (floats) Visit(n *ast.Node) {
 	}
 }
 
+var symbols = strings.NewReplacer("×", "*", "÷", "/", "−", "-", "π", "pi", "√", "sqrt")
+
+// parseArith parses s and checks that it is plain arithmetic. With free non-nil,
+// unknown identifiers are allowed and recorded there instead of rejected.
+func parseArith(s string, free map[string]bool) (tree *parser.Tree, op bool, ok bool) {
+	tree, err := parser.Parse(s)
+	if err != nil {
+		return nil, false, false
+	}
+	chk := arith{free: free}
+	ast.Walk(&tree.Node, &chk)
+	return tree, chk.op, !chk.bad
+}
+
+// compileArith compiles an expression already checked by parseArith. vars are
+// extra float64 variables (e.g. an integrand's x), set in the env passed to expr.Run.
+func compileArith(s string, vars ...string) (*vm.Program, error) {
+	env := mathEnv
+	if len(vars) > 0 {
+		env = maps.Clone(mathEnv)
+		for _, v := range vars {
+			env[v] = 0.0
+		}
+	}
+	return expr.Compile(s, expr.Env(env), expr.DisableAllBuiltins(), expr.Patch(floats{}), expr.AsFloat64())
+}
+
+func runFloat(prog *vm.Program, env map[string]any) (float64, bool) {
+	out, err := expr.Run(prog, env)
+	if err != nil {
+		return 0, false
+	}
+	f, ok := out.(float64)
+	return f, ok
+}
+
 func calc(q string) *Answer {
 	s := strings.TrimSpace(strings.TrimRight(calcPrefix.ReplaceAllString(q, ""), "=? "))
 	if isoDate.MatchString(s) {
 		return nil
 	}
-	s = strings.NewReplacer("×", "*", "÷", "/", "−", "-", "π", "pi", "√", "sqrt").Replace(s)
+	s = symbols.Replace(s)
 	s = timesX.ReplaceAllString(s, "$1*$2")
-	tree, err := parser.Parse(s)
+	tree, op, ok := parseArith(s, nil)
+	if !ok || !op {
+		return nil
+	}
+	prog, err := compileArith(s)
 	if err != nil {
 		return nil
 	}
-	var chk arith
-	ast.Walk(&tree.Node, &chk)
-	if chk.bad || !chk.op {
-		return nil
-	}
-	shown := tree.Node.String()
-	prog, err := expr.Compile(s, expr.Env(mathEnv), expr.DisableAllBuiltins(), expr.Patch(floats{}), expr.AsFloat64())
-	if err != nil {
-		return nil
-	}
-	out, err := expr.Run(prog, mathEnv)
-	if err != nil {
-		return nil
-	}
-	f, ok := out.(float64)
+	f, ok := runFloat(prog, mathEnv)
 	if !ok {
 		return nil
 	}
+	shown := tree.Node.String()
 	res := formatNum(f)
 	if res == "" {
 		return nil

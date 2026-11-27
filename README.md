@@ -28,7 +28,9 @@ look. No Python, Redis or Playwright at runtime; Node is only needed to rebuild 
   (`5 + 5`, `2^10`, `sqrt(2) * pi`, `what is 12*12`) is evaluated with
   [expr](https://github.com/expr-lang/expr), restricted to arithmetic and math
   functions; unit conversions (`10 km in miles`, `72 f to c`, `how many feet in a mile`)
-  use [go-units](https://github.com/bcicen/go-units). Other queries get a Wikipedia
+  use [go-units](https://github.com/bcicen/go-units); definite integrals
+  (`integrate x over 1, 5`, `integral of sin(t) dt from 0 to pi`, `∫ exp(-x^2) from -inf to inf`)
+  are computed with [gonum](https://www.gonum.org/)'s Gauss-Legendre quadrature. Other queries get a Wikipedia
   summary in the same spot.
 - Bangs: `!g`, `!w`, `!gh`, `!yt`, `!r`, `!so`, `!aw`, `!mdn`, `!pkg`, ... go to the
   external site. `!i`, `!n`, `!code`, and `!forums` switch tabs without leaving trawl.

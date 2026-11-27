@@ -9,7 +9,7 @@ import (
 )
 
 type Answer struct {
-	Kind   string `json:"kind"`   // "calc" or "convert"
+	Kind   string `json:"kind"`   // "calc", "integral" or "convert"
 	Expr   string `json:"expr"`   // the question, normalized: "5 + 5", "10 kilometers"
 	Result string `json:"result"` // "10", "6.21371 miles"
 }
@@ -23,19 +23,25 @@ func For(q string) *Answer {
 	if a := convert(q); a != nil {
 		return a
 	}
+	if a := integral(q); a != nil {
+		return a
+	}
 	return calc(q)
 }
 
 // formatNum prints a float the way the old calculator did: integers in full,
 // otherwise 12 significant digits, large/small values as "1.5 x 10^20".
-func formatNum(v float64) string {
+func formatNum(v float64) string { return formatSig(v, 12) }
+
+// formatSig is formatNum with digits significant digits.
+func formatSig(v float64, digits int) string {
 	if math.IsNaN(v) || math.IsInf(v, 0) {
 		return ""
 	}
 	if v == math.Trunc(v) && math.Abs(v) < 1e15 {
 		return strconv.FormatFloat(v, 'f', 0, 64)
 	}
-	s := strconv.FormatFloat(v, 'g', 12, 64)
+	s := strconv.FormatFloat(v, 'g', digits, 64)
 	if mant, exp, ok := strings.Cut(s, "e"); ok {
 		n, _ := strconv.Atoi(exp)
 		return mant + " x 10^" + strconv.Itoa(n)

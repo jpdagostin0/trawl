@@ -45,3 +45,29 @@ func TestConvert(t *testing.T) {
 		t.Errorf("got %+v", a)
 	}
 }
+
+func TestIntegral(t *testing.T) {
+	for q, want := range map[string]string{
+		"integrate x over 1, 5":                  "∫ x dx from 1 to 5 = 12",
+		"integrate x from 1 to 5":                "∫ x dx from 1 to 5 = 12",
+		"integral of x^2 dx from 0 to 3":         "∫ x ^ 2 dx from 0 to 3 = 9",
+		"∫ 3x^2 from 0 to 2":                     "∫ 3 * x ^ 2 dx from 0 to 2 = 8",
+		"integrate sin(t) dt over [0, pi]":       "∫ sin(t) dt from 0 to pi = 2",
+		"integral of 1/x between 1 and e":        "∫ 1 / x dx from 1 to e = 1",
+		"integrate exp(-x^2) from -inf to inf":   "∫ exp(-x ^ 2) dx from -inf to inf = 1.77245385091",
+		"integrate sqrt(x) from 0 to 1":          "∫ sqrt(x) dx from 0 to 1 = 0.6666667",
+		"integrate x over 1 to 5":                "∫ x dx from 1 to 5 = 12",
+		"integrate x from 5 to 1":                "∫ x dx from 5 to 1 = -12",
+		"what is the integral of 2 from 0 to 10": "∫ 2 dx from 0 to 10 = 20",
+	} {
+		a := For(q)
+		if a == nil || a.Kind != "integral" || a.Expr+" = "+a.Result != want {
+			t.Errorf("For(%q) = %+v, want %q", q, a, want)
+		}
+	}
+	for _, q := range []string{"integrate x", "intel from 2 to 5", "integral of cost from 1 to 5", "integrate x*y from 0 to 1", "integrate 1/x from 0 to 1", "international flights from boston to nyc"} {
+		if a := For(q); a != nil {
+			t.Errorf("For(%q) = %+v, want nil", q, a)
+		}
+	}
+}

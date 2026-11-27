@@ -12,6 +12,8 @@ export default function QuickAnswer({ answer, infobox, q }: { answer?: Answer; i
   return null;
 }
 
+const label: Record<Answer["kind"], string> = { calc: "Calculator", integral: "Definite integral", convert: "Unit conversion" };
+
 function Calc({ a }: { a: Answer }) {
   return (
     <table className="onebox calc" role="presentation">
@@ -26,7 +28,7 @@ function Calc({ a }: { a: Answer }) {
                 {a.expr} = {a.result}
               </b>
             </h2>
-            <div className="ob-more">{a.kind === "convert" ? "Unit conversion" : "Calculator"}</div>
+            <div className="ob-more">{label[a.kind]}</div>
           </td>
         </tr>
       </tbody>

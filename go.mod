@@ -14,6 +14,7 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/temoto/robotstxt v1.1.2
 	golang.org/x/sync v0.25.0
+	gonum.org/v1/gonum v0.17.0
 )
 
 require (

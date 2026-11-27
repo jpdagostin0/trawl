@@ -25,7 +25,7 @@ export interface Infobox {
 
 // answer.Answer
 export interface Answer {
-  kind: "calc" | "convert";
+  kind: "calc" | "integral" | "convert";
   expr: string;
   result: string;
 }
