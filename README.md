@@ -79,7 +79,9 @@ the summary streams above the results and supports Markdown and LaTeX math.
 This uses `lfm3:1.7b` through Ollama (`OLLAMA_HOST`); `-summary-model`
 (`TRAWL_SUMMARY_MODEL`) overrides the model. Once a summary completes, you can
 ask follow-up questions using the same sources and recent conversation. This
-context stays in memory for up to 30 minutes. The checkbox starts off unless
+context stays in memory for up to 30 minutes. Summaries and follow-ups share
+one first-come, first-served queue, so the model answers one request at a time
+at full speed instead of splitting it between users. The checkbox starts off unless
 `-summary` or `TRAWL_SUMMARY=1` is set.
 
 The Archive tab shows locally saved, readable Markdown snapshots of pages
@@ -89,6 +91,12 @@ uses `~/.local/share/trawl/archive` (or `$XDG_DATA_HOME/trawl/archive`), with a
 4 GB cap on stored files. It purges the oldest snapshots first. Override the
 path via `-archive-dir` / `TRAWL_ARCHIVE_DIR`, or set `-archive-dir=` to turn
 storage off. Anyone who can access this trawl instance can read its archive.
+
+Settings (top right, next to Archive) picks the theme: Classic (2008), or Simple
+modern, with light/dark, an accent color and an optional wallpaper image with
+dim and blur. Settings are saved in the browser's localStorage. Themes live in
+`frontend/src/themes/<name>/` and are registered in
+`frontend/src/themes/index.ts`.
 
 Desktop build with a tray icon (shows that trawl is running and its port, with
 Reload, which restarts the server with fresh caches, and Quit):
@@ -124,6 +132,7 @@ into `internal/web/dist`, which is committed and embedded with `go:embed`, so
     POST /api/summary/follow-up           # {"session":"<summary_session>","question":"..."}; streamed answer
     GET /api/archive?offset=0             # snapshots and archive usage
     GET /api/archive/{id}                  # saved Markdown and source metadata
+    GET /api/wiki?url=<wikipedia article>  # expanded panel: description, image, lead, infobox facts, sections
     GET /api/scrape?url=...[&html=1][&links=1]
     GET /api/map?url=...                    # same-site links on a page
     GET /api/crawl?url=...&limit=10&depth=2 # bounded BFS under the start path, respects robots.txt
@@ -144,7 +153,7 @@ the connection is made, so redirects and DNS rebinding can't get around it.
     internal/feedback votes + vectors in DuckDB, Ollama embeddings, vote-based re-ranking
     internal/fetch    safe HTTP client, readability -> markdown, map, crawl, robots.txt
     internal/web      net/http handlers, embedded frontend build, bangs, favicon/image proxy
-    frontend          React + Bootstrap UI (classic look)
+    frontend          React + Bootstrap UI; themes in src/themes (classic look)
 
 To add an engine, implement `engine.Engine` (Name/Category/Weight/Search) and add it
 to `engine.All()`.

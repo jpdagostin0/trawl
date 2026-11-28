@@ -28,7 +28,7 @@ export default function Archive() {
     <div>
       <GBar cat="archive" onTips={() => setTips(true)} />
       <header className="rhead"><Logo size="small" sub="archive" /></header>
-      <BlueBar label="Archive">{list.data ? `${size(list.data.used_bytes)} of ${size(list.data.limit_bytes)} used` : null}</BlueBar>
+      <BlueBar>{list.data ? `${size(list.data.used_bytes)} of ${size(list.data.limit_bytes)} used` : null}</BlueBar>
       <main className="archive-main">
         {id ? (
           <>

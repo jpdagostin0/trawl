@@ -10,6 +10,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/ollama/ollama/api"
+	"golang.org/x/sync/semaphore"
 )
 
 const summaryResults = 5
@@ -21,6 +22,9 @@ type Summarizer struct {
 	client   *api.Client
 	model    string
 	sessions *lru.LRU[string, *summarySession]
+	// queue runs one chat at a time, first come first served, so concurrent
+	// summaries and follow-ups don't split the model and slow each other down.
+	queue *semaphore.Weighted
 }
 
 func NewSummarizer(model string) (*Summarizer, error) {
@@ -28,7 +32,7 @@ func NewSummarizer(model string) (*Summarizer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Summarizer{client: client, model: model, sessions: lru.NewLRU[string, *summarySession](128, nil, 30*time.Minute)}, nil
+	return &Summarizer{client: client, model: model, sessions: lru.NewLRU[string, *summarySession](128, nil, 30*time.Minute), queue: semaphore.NewWeighted(1)}, nil
 }
 
 func (s *Summarizer) summarize(ctx context.Context, query string, sources []summarySource, emit func(string) error) (text, session string, err error) {
@@ -48,7 +52,12 @@ func (s *Summarizer) summarize(ctx context.Context, query string, sources []summ
 }
 
 func (s *Summarizer) streamChat(ctx context.Context, messages []api.Message, emit func(string) error) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// Waiting in the queue ends when the client goes away; the timeout covers only generation.
+	if err := s.queue.Acquire(ctx, 1); err != nil {
+		return "", err
+	}
+	defer s.queue.Release(1)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	stream := true
 	var text strings.Builder
@@ -56,7 +65,7 @@ func (s *Summarizer) streamChat(ctx context.Context, messages []api.Message, emi
 	err := s.client.Chat(ctx, &api.ChatRequest{
 		Model: s.model, Stream: &stream, Think: &api.ThinkValue{Value: false},
 		Messages: messages,
-		Options:  map[string]any{"num_ctx": 32768, "num_predict": 400, "temperature": 0.2},
+		Options:  map[string]any{"num_ctx": 32768, "temperature": 0.2},
 	}, func(response api.ChatResponse) error {
 		completed = response.Done
 		if response.Message.Content == "" {

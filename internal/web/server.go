@@ -63,6 +63,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", s.apiConfig)
 	mux.HandleFunc("GET /api/search", s.apiSearch)
 	mux.HandleFunc("POST /api/summary/follow-up", s.apiSummaryFollowUp)
+	mux.HandleFunc("GET /api/wiki", s.apiWiki)
 	mux.HandleFunc("GET /api/scrape", s.apiScrape)
 	mux.HandleFunc("GET /api/map", s.apiMap)
 	mux.HandleFunc("GET /api/crawl", s.apiCrawl)
@@ -354,6 +355,10 @@ func (s *Server) apiSearch(w http.ResponseWriter, r *http.Request) {
 		category := parseCategory(qv.Get("category"))
 		withSummary := query.Page == 1 && category != engine.Images && qv.Get("summary") == "1" &&
 			s.Summary != nil && s.Summary.Enabled.Load()
+		if withSummary {
+			// The summary can wait in the model queue and runs uncapped, past the server's WriteTimeout.
+			rc.SetWriteDeadline(time.Time{})
+		}
 		var writeErr error
 		writeFrame := func(frame any) error {
 			if writeErr == nil {

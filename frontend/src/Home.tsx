@@ -27,7 +27,7 @@ export default function Home() {
       <main className="home-main">
         <Logo size="large" sub={cat} />
         <div className="home-form">
-          <SearchForm variant="home" cat={cat} key={cat} onTips={() => setTips(true)} />
+          <SearchForm variant="home" cat={cat} key={cat} />
         </div>
         <p className="home-blurb">{blurbs[cat]}</p>
       </main>

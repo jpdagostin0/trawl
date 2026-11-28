@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/ollama/ollama/api"
@@ -73,6 +74,7 @@ func (s *Server) apiSummaryFollowUp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("X-Accel-Buffering", "no")
 	enc, rc := json.NewEncoder(w), http.NewResponseController(w)
+	rc.SetWriteDeadline(time.Time{}) // queued and uncapped: may outlast the server's WriteTimeout
 	write := func(frame followUpFrame) error {
 		if err := enc.Encode(frame); err != nil {
 			return err

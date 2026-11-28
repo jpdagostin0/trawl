@@ -1,0 +1,72 @@
+/* The wallpaper behind the page and its dim/blur layer (newtab-ambient.css). */
+
+#wallpaper,
+#wallpaper-dim {
+  height: 100vh;
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  width: 100vw;
+  z-index: -1;
+}
+
+#wallpaper {
+  animation: ambient-in 400ms ease-out;
+  background: center / cover no-repeat;
+}
+
+#wallpaper-dim {
+  transition: background-color 200ms, backdrop-filter 200ms;
+}
+
+@keyframes ambient-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Loose text over a wallpaper gets a backing. */
+.has-wallpaper :is(.gbar-left > a, .gbar-right > a, .home-blurb, .ssb, .readcta, .englines, .foot > div, .archive-main > p, .archive-main > a, .archive-main nav, .isize, .nsort, .reader, .reader-loading, .reader-error) {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--tile) 84%, transparent);
+}
+
+.has-wallpaper :is(.gbar-left > a, .gbar-right > a):hover {
+  background: var(--tile-hover);
+}
+
+.has-wallpaper :is(.home-blurb, .readcta, .foot > div, .archive-main > p, .archive-main > a, .archive-main nav, .isize, .nsort) {
+  display: inline-block;
+  padding: 4px 10px;
+}
+
+.has-wallpaper :is(.foot, .home-blurb, .ssb, .englines, .archive-main > p) {
+  color: var(--fg);
+}
+
+.has-wallpaper .ssb {
+  border-bottom: 0;
+  padding: 6px 10px;
+}
+
+.has-wallpaper .englines {
+  display: table;
+  margin: 0 auto 16px;
+  padding: 6px 10px;
+}
+
+.has-wallpaper .reader {
+  padding: 24px 28px;
+}
+
+/* Tiles turn see-through, like the new tab's container sections. */
+.has-wallpaper :is(.g, .search-summary, .onebox, .sorry, .nomatch, .cache-box, .icell) {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--tile) 88%, transparent);
+}
+
+.has-wallpaper .icell {
+  padding: 8px 4px;
+}

@@ -1,0 +1,201 @@
+/* The settings drawer (newtab.css's drawer, settings.css's cards), opened from
+   the top bar's Settings link. */
+
+.drawer {
+  background: var(--tile);
+  border-right: 1px solid var(--border);
+  bottom: 0;
+  box-shadow: 16px 0 40px rgb(0 0 0 / 0.14);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  left: 0;
+  max-width: 100vw;
+  position: fixed;
+  top: 0;
+  transform: translateX(calc(-100% - 40px));
+  transition: transform var(--drawer-time) var(--drawer-ease), visibility 0s var(--drawer-time);
+  visibility: hidden;
+  width: max(30vw, 340px);
+  z-index: 1060;
+}
+
+.drawer.open {
+  transform: none;
+  transition: transform var(--drawer-time) var(--drawer-ease), visibility 0s;
+  visibility: visible;
+}
+
+.drawer-head {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  padding: 12px 12px 12px 16px;
+}
+
+.drawer-head h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.drawer-head .close {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  font-size: 18px;
+  height: 28px;
+  line-height: 1;
+  margin-left: auto;
+  width: 28px;
+}
+
+.drawer-head .close:hover {
+  background: var(--tile-hover);
+  color: var(--fg);
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+}
+
+.settings-drawer .settings-card {
+  background: var(--bg);
+  border: 0;
+  border-radius: 0;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.settings-drawer .settings-card h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.settings-drawer .hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 0 0 8px;
+}
+
+.settings-drawer .setting {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.settings-drawer .setting + .setting {
+  border-top: 1px solid var(--border);
+}
+
+.settings-drawer .setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-drawer .setting-label {
+  font-size: 13.5px;
+}
+
+.settings-drawer .setting-desc {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-drawer select,
+.settings-drawer input[type="text"] {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-sizing: border-box;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+}
+
+.settings-drawer select:focus,
+.settings-drawer input[type="text"]:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.settings-drawer input[type="color"] {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  height: 32px;
+  padding: 2px;
+  width: 44px;
+}
+
+.settings-drawer input[type="range"] {
+  accent-color: var(--accent);
+}
+
+.settings-drawer .field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 12px 0;
+}
+
+.settings-drawer .field span {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.settings-drawer .field input {
+  width: 100%;
+}
+
+.settings-drawer button,
+.settings-drawer .file-button {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 14px;
+}
+
+.settings-drawer .drawer-head .close {
+  border: 0;
+  padding: 0;
+}
+
+.settings-drawer button:hover,
+.settings-drawer .file-button:hover {
+  background: var(--tile-hover);
+}
+
+.settings-drawer button.primary {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+
+.settings-drawer .actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.settings-drawer .error {
+  color: var(--bad);
+  font-size: 12.5px;
+  margin: 10px 0 0;
+}

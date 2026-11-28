@@ -1,0 +1,11 @@
+/* Simple modern: the look of mac-chrome's new tab page (~/projs/mac-chrome,
+   src/extension/css/newtab*.css): system font, flat square tiles, light and
+   dark colors, an accent, and an optional wallpaper. */
+
+@import "./base.css";
+@import "./chrome.css";
+@import "./results.css";
+@import "./wiki.css";
+@import "./pages.css";
+@import "./wallpaper.css";
+@import "./settings.css";

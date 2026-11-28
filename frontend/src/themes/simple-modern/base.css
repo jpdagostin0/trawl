@@ -1,0 +1,131 @@
+/* Colors (newtab.css) and the page's base text. --accent can be set by the user
+   (inline on <html>); data-bs-theme switches both Bootstrap and these to dark. */
+
+:root {
+  color-scheme: light;
+  --bg: #f9f9fb;
+  --fg: #15141a;
+  --muted: #5b5b66;
+  --tile: #fff;
+  --tile-hover: #f0f0f4;
+  --border: #e0e0e6;
+  --accent: #0061e0;
+  --visited: #8000d7;
+  --good: #058b00;
+  --bad: #d70022;
+  --drawer-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --drawer-time: 420ms;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "DejaVu Sans Mono", monospace;
+  --bs-body-font-family: var(--font);
+  --bs-body-font-size: 14px;
+  --bs-body-line-height: 1.45;
+  --bs-body-bg: var(--bg);
+  --bs-body-color: var(--fg);
+  --bs-border-color: var(--border);
+  --bs-border-radius: 0;
+  --bs-border-radius-sm: 0;
+  --bs-border-radius-lg: 0;
+}
+
+:root[data-bs-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c1b22;
+  --fg: #fbfbfe;
+  --muted: #a8a8b3;
+  --tile: #2b2a33;
+  --tile-hover: #3a3944;
+  --border: #3a3944;
+  --accent: #00ddff;
+  --visited: #c689ff;
+  --good: #54ffbd;
+  --bad: #ff848b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --drawer-time: 1ms;
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-x: hidden;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+
+code {
+  color: inherit;
+}
+
+kbd {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--fg);
+  padding: 1px 6px;
+}
+
+cite {
+  color: var(--muted);
+  font-style: normal;
+}
+
+b,
+strong {
+  font-weight: 600;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.page-home,
+.page-results,
+.page-reader,
+.archive-main {
+  animation: page-in 220ms var(--drawer-ease);
+}
+
+/* Small accent tags: "Loading...", like the new tab's "this tab" label. */
+.notice-y {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--fg);
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 8px;
+}

@@ -1,0 +1,148 @@
+/* The expanded Wikipedia panel beside the results: one tall tile with the
+   picture across its top. */
+
+.wiki-panel {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  font-size: 13.5px;
+  overflow: hidden;
+}
+
+.wp-image {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: block;
+}
+
+.wp-image img {
+  display: block;
+  height: auto;
+  max-height: 380px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.wp-body {
+  padding: 16px 18px 18px;
+}
+
+.wp-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.wp-title a {
+  color: var(--fg);
+}
+
+.wp-desc {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.wp-extract {
+  line-height: 1.55;
+  margin-top: 14px;
+}
+
+.wp-extract p {
+  margin: 0 0 0.7em;
+}
+
+.wp-more {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 0;
+}
+
+.wp-more:hover {
+  text-decoration: underline;
+}
+
+.wp-src {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.wp-src a {
+  color: var(--muted);
+}
+
+.wp-facts {
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 16px;
+  width: 100%;
+}
+
+.wp-facts tr {
+  border-top: 1px solid var(--border);
+}
+
+.wp-facts th,
+.wp-facts td {
+  padding: 7px 0;
+  vertical-align: top;
+}
+
+.wp-facts th {
+  color: var(--muted);
+  font-weight: 600;
+  padding-right: 14px;
+  width: 34%;
+}
+
+.wp-facts td {
+  overflow-wrap: anywhere;
+}
+
+.wp-sections {
+  margin-top: 18px;
+}
+
+.wp-sections h3 {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.wp-sections ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wp-sections a {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  display: block;
+  font-size: 12.5px;
+  padding: 4px 10px;
+}
+
+.wp-sections a:hover {
+  background: var(--tile-hover);
+  text-decoration: none;
+}
+
+.has-wallpaper .wiki-panel {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--tile) 88%, transparent);
+}

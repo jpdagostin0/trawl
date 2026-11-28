@@ -1,6 +1,9 @@
 /* trawl, circa 2008. Bootstrap supplies layout, the modal and dropdown; everything
    visual is overridden to look like the classic Google pages. */
 
+@import "./settings.css";
+@import "./wiki.css";
+
 :root {
   --link: #00c;
   --visited: #551a8b;
@@ -106,19 +109,6 @@ cite {
   font-size: 24px;
   text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.25);
 }
-.logo-sub {
-  position: absolute;
-  right: 2px;
-  bottom: -1.15em;
-  font: bold 16px arial, sans-serif;
-  color: #3366cc;
-  letter-spacing: 0;
-  text-shadow: none;
-}
-.logo-small .logo-sub {
-  font-size: 12px;
-  bottom: -1.05em;
-}
 .logo-small .logo-word {
   letter-spacing: 0.01em;
 }
@@ -146,46 +136,6 @@ cite {
 .gbar b {
   color: #000;
 }
-.gbar-more .nav-link {
-  padding: 0;
-  color: var(--link);
-}
-.gbar-more .nav-link:hover,
-.gbar-more .nav-link:focus,
-.gbar-more .nav-link.show {
-  color: var(--link);
-}
-.gbar-more .dropdown-toggle::after {
-  border-top-width: 0.35em;
-  border-right-width: 0.3em;
-  border-left-width: 0.3em;
-  margin-left: 0.2em;
-  vertical-align: 0.15em;
-  color: #000;
-}
-.gbar-more .dropdown-menu {
-  --bs-dropdown-font-size: 13px;
-  --bs-dropdown-padding-y: 0;
-  --bs-dropdown-min-width: 9em;
-  --bs-dropdown-border-radius: 0;
-  --bs-dropdown-link-color: var(--link);
-  --bs-dropdown-link-hover-color: #fff;
-  --bs-dropdown-link-hover-bg: #36c;
-  --bs-dropdown-link-active-color: #000;
-  --bs-dropdown-link-active-bg: #fff;
-  --bs-dropdown-item-padding-y: 0.2em;
-  --bs-dropdown-item-padding-x: 0.8em;
-  --bs-dropdown-divider-margin-y: 0.2em;
-  border-color: var(--gbar-line) #36c #36c #a2bae7;
-  box-shadow: none;
-}
-.gbar-more .dropdown-item {
-  text-decoration: underline;
-}
-.gbar-more .dropdown-item.active {
-  font-weight: bold;
-  text-decoration: none;
-}
 
 /* ---- buttons & inputs ---- */
 .btn.btn-classic {
@@ -198,6 +148,10 @@ cite {
   line-height: 1.2;
   box-shadow: none;
   margin: 0 2px;
+}
+.btn.btn-classic .search-icon {
+  display: block;
+  margin: 1px 6px 0;
 }
 .btn.btn-classic:hover {
   color: #000;
@@ -251,12 +205,6 @@ cite {
 .sf-box {
   position: relative;
 }
-.sf-links {
-  font-size: 11px;
-  line-height: 1.3;
-  margin-left: 4px;
-  white-space: nowrap;
-}
 .sf-top .sf-q {
   width: 400px;
 }
@@ -272,15 +220,6 @@ cite {
 }
 .sf-home .sf-q {
   width: 476px;
-}
-.sf-home .sf-links {
-  position: absolute;
-  left: calc(50% + 246px);
-  top: 1px;
-}
-.sf-buttons {
-  text-align: center;
-  margin-top: 9px;
 }
 
 /* Google Suggest, 2008 */
@@ -343,11 +282,6 @@ cite {
   font-size: 13px;
   padding: 18px 8px 24px;
 }
-.foot .copy {
-  font-size: 11px;
-  margin-top: 1.4em;
-  color: #000;
-}
 
 /* ---- results page ---- */
 .page-results {
@@ -373,10 +307,6 @@ cite {
   border-top: 1px solid var(--bar-line);
   padding: 1px 8px 3px;
   font-size: 13px;
-}
-.ssb-label {
-  font-size: 16px;
-  font-weight: bold;
 }
 .ssb-info {
   text-align: right;
@@ -502,15 +432,23 @@ h3.r {
 .archive-article h1 {
   font-size: 1.5em;
 }
+/* Fixed height: the text scrolls inside, the follow-up box stays at the bottom. */
 .search-summary {
   margin: 1em 0;
-  padding: 0.75em 1em;
+  padding: 0.75em 1em 0;
   border: 1px solid var(--bar);
   font-size: 13px;
+  height: 20em;
+  overflow-y: auto;
 }
-.search-summary h2 {
-  margin: 0 0 0.4em;
-  font-size: 16px;
+.search-summary > :last-child {
+  padding-bottom: 0.75em;
+}
+.summary-follow-up form {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding-top: 0.3em;
 }
 .search-summary > div > p {
   margin: 0;
@@ -606,8 +544,8 @@ h3.r {
   color: var(--gray);
 }
 .onebox.wiki .ob-icon img {
-  max-width: 80px;
-  max-height: 100px;
+  max-width: 140px;
+  max-height: 180px;
   border: 1px solid #ccc;
 }
 .onebox.wiki .s {
@@ -704,10 +642,6 @@ h3.r {
 }
 .bsf .sf-row {
   justify-content: center;
-}
-.bsf-links {
-  margin-top: 10px;
-  font-size: 13px;
 }
 
 /* ---- images ---- */
@@ -979,12 +913,6 @@ h3.r {
 }
 
 /* ---- small screens: 2008 never had them, but don't break ---- */
-@media (max-width: 1000px) {
-  .sf-home .sf-links {
-    position: static;
-    display: none;
-  }
-}
 @media (max-width: 720px) {
   .gbar-right {
     display: none;
@@ -1021,9 +949,6 @@ h3.r {
   }
   .rhead form {
     flex: 1 1 100%;
-  }
-  .sf-links {
-    display: none;
   }
   .ssb {
     flex-wrap: wrap;

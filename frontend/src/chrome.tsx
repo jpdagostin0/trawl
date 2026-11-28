@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { Link, useNavigate } from "react-router";
 import { Button, Modal, Table } from "react-bootstrap";
-import NavDropdown from "react-bootstrap/NavDropdown";
+import { SettingsLink } from "./Settings";
 import { catLabel, searchURL, useConfig } from "./util";
 
 // t r a w l in blue, red, yellow, blue, green, the way G o o g l e was colored.
@@ -24,46 +24,33 @@ export function Logo({ size = "large", sub }: { size?: "large" | "small" | "tiny
           </span>
         ))}
       </span>
-      {sub && sub !== "general" && <span className="logo-sub">{catLabel[sub] ?? sub}</span>}
     </Link>
   );
 }
 
-const PRIMARY = ["general", "images", "news", "videos"];
-
-// The top-left "Web Images News ... more ▼" bar and the top-right links.
+// The top-left category links and the top-right links.
 export function GBar({ cat = "general", q = "", onTips }: { cat?: string; q?: string; onTips: () => void }) {
   const { categories } = useConfig();
-  const ids = categories.map((c) => c.id);
-  const primary = PRIMARY.filter((c) => ids.includes(c));
-  const more = ids.filter((c) => !PRIMARY.includes(c));
   const href = (c: string) => (q ? searchURL(q, c) : c === "general" ? "/" : `/?c=${c}`);
   return (
     <div className="gbar">
       <nav className="gbar-left">
-        {primary.map((c) =>
-          c === cat ? (
-            <b key={c}>{catLabel[c]}</b>
+        {categories.map(({ id }) =>
+          id === cat ? (
+            <b key={id}>{catLabel[id] ?? id}</b>
           ) : (
-            <Link key={c} to={href(c)}>
-              {catLabel[c]}
+            <Link key={id} to={href(id)}>
+              {catLabel[id] ?? id}
             </Link>
           ),
         )}
-        <NavDropdown title={<u>more</u>} id="gbar-more" className="gbar-more">
-          {more.map((c) => (
-            <NavDropdown.Item key={c} as={Link} to={href(c)} active={c === cat}>
-              {catLabel[c] ?? c}
-            </NavDropdown.Item>
-          ))}
-          <NavDropdown.Divider />
-          <NavDropdown.Item onClick={onTips}>Bangs &amp; shortcuts</NavDropdown.Item>
-          <NavDropdown.Item href="/api/search?q=hello">JSON API</NavDropdown.Item>
-        </NavDropdown>
       </nav>
       <nav className="gbar-right">
         {cat === "archive" ? <b>Archive</b> : <Link to="/archive">Archive</Link>} |{" "}
-        <a href="/opensearch.xml">Add to browser</a> | <a href="/api/search?q=hello">JSON API</a>
+        <a href="#tips" onClick={(e) => (e.preventDefault(), onTips())}>
+          Tips
+        </a>{" "}
+        | <SettingsLink />
       </nav>
     </div>
   );
@@ -156,17 +143,23 @@ function Suggest({ value, onPick, inputRef }: SuggestProps) {
   );
 }
 
-const buttonLabel: Record<string, string | undefined> = { general: "trawl Search", images: "Search Images", news: "Search News", videos: "Search Video" };
+function SearchIcon() {
+  return (
+    <svg className="search-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+      <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2.2" />
+      <path d="m15.5 15.5 5 5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
-// variant: "home" (big centered box + two buttons), "top" (results header), "bottom" (results footer box)
+// variant: "home" (big centered box), "top" (results header), "bottom" (results footer box)
 interface SearchFormProps {
   q?: string;
   cat?: string;
   variant?: "home" | "top" | "bottom";
-  onTips?: () => void;
 }
 
-export function SearchForm({ q = "", cat = "general", variant = "top", onTips }: SearchFormProps) {
+export function SearchForm({ q = "", cat = "general", variant = "top" }: SearchFormProps) {
   const [value, setValue] = useState(q);
   const nav = useNavigate();
   const input = useRef<HTMLInputElement>(null);
@@ -221,35 +214,15 @@ export function SearchForm({ q = "", cat = "general", variant = "top", onTips }:
           />
           {variant !== "bottom" && <Suggest value={value} onPick={pick} inputRef={input} />}
         </div>
-        {!home && (
-          <Button type="submit" name="btnG" className="btn-classic">
-            {variant === "bottom" ? "Search" : buttonLabel[cat] ?? "Search"}
+        <Button type="submit" name="btnG" className="btn-classic" title="Search" aria-label="Search">
+          <SearchIcon />
+        </Button>
+        {home && cat === "general" && (
+          <Button type="submit" name="btnI" className="btn-classic">
+            I&apos;m Feeling Lucky
           </Button>
-        )}
-        {variant !== "bottom" && (
-          <span className="sf-links">
-            <a href="#tips" onClick={(e) => (e.preventDefault(), onTips?.())}>
-              Search Tips
-            </a>
-            <br />
-            <a href="#tips" onClick={(e) => (e.preventDefault(), onTips?.())}>
-              Bangs
-            </a>
-          </span>
         )}
       </div>
-      {home && (
-        <div className="sf-buttons">
-          <Button type="submit" name="btnG" className="btn-classic">
-            {buttonLabel[cat] ?? "trawl Search"}
-          </Button>
-          {cat === "general" && (
-            <Button type="submit" name="btnI" className="btn-classic">
-              I&apos;m Feeling Lucky
-            </Button>
-          )}
-        </div>
-      )}
     </form>
   );
 }
@@ -258,10 +231,8 @@ export function Footer() {
   return (
     <footer className="foot">
       <div>
-        <Link to="/">trawl Home</Link> - <a href="/api/search?q=hello">JSON API</a> - <a href="/opensearch.xml">Add to browser</a> -{" "}
-        <a href="https://github.com/jpdagostin0/trawl" rel="noreferrer">About trawl</a>
+        <a href="https://github.com/jpdagostin0/trawl" rel="noreferrer">About trawl</a> - No ads. No tracking. No logs.
       </div>
-      <div className="copy">&copy;{new Date().getFullYear()} trawl - No ads. No tracking. No logs.</div>
     </footer>
   );
 }
@@ -402,11 +373,10 @@ export function Pager({ page, hasNext, href }: { page: number; hasNext: boolean;
   );
 }
 
-// Light blue bar under the header: "Web    Results 1 - 10 for q. (0.23 seconds)"
-export function BlueBar({ label, children }: { label: string; children?: ReactNode }) {
+// Light blue bar under the header: "Results 1 - 10 for q. (0.23 seconds)"
+export function BlueBar({ children }: { children?: ReactNode }) {
   return (
     <div className="ssb">
-      <div className="ssb-label">{label}</div>
       <div className="ssb-info">{children}</div>
     </div>
   );

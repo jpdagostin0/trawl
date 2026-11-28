@@ -4,6 +4,7 @@ import { Col, Form, Modal, Row } from "react-bootstrap";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import QuickAnswer from "./QuickAnswer";
 import SearchSummary from "./SearchSummary";
+import WikiPanel, { topWikipedia, useWikiArticle } from "./WikiPanel";
 import { BlueBar, Footer, GBar, Logo, Notice, Pager, SearchForm, TipsModal } from "./chrome";
 import { catLabel, displayURL, fileType, Highlight, host, proxied, relTime, searchURL, useConfig, useNDJSON } from "./util";
 import { useVotes, VoteButtons, type VoteCtx } from "./Votes";
@@ -42,6 +43,9 @@ export default function Results() {
   const failed = r?.done && !results.length && r.engines.length > 0 && r.engines.every((e) => e.error);
   const first = r ? (page - 1) * results.length + 1 : 0;
   const votes = useVotes(q, cat, first, !!voting, () => setRev((n) => n + 1));
+  // A Wikipedia article in the top five gets the expanded view on the right (and
+  // replaces the smaller Wikipedia onebox).
+  const wiki = useWikiArticle(cat === "general" && page === 1 ? topWikipedia(results) : undefined);
 
   const href = (p: number) => searchURL(q, cat, p);
   const sub = cat === "general" ? undefined : cat;
@@ -51,9 +55,9 @@ export default function Results() {
       <GBar cat={cat} q={q} onTips={() => setTips(true)} />
       <header className="rhead">
         <Logo size="small" sub={sub} />
-        <SearchForm q={q} cat={cat} variant="top" onTips={() => setTips(true)} />
+        <SearchForm q={q} cat={cat} variant="top" />
       </header>
-      <BlueBar label={catLabel[cat] ?? cat}>
+      <BlueBar>
         {pending && !results.length ? (
           <Notice>Loading...</Notice>
         ) : r && results.length ? (
@@ -70,7 +74,7 @@ export default function Results() {
         ) : null}
       </BlueBar>
 
-      <Row className="rbody g-0">
+      <Row className={`rbody g-0${wiki ? " with-side" : ""}`}>
         <Col lg={cat === "images" ? 12 : 8} className="rmain">
           {summaryResponse && <SearchSummary response={summaryResponse} />}
           {r?.reader_url && (
@@ -78,7 +82,7 @@ export default function Results() {
               Open <b>{r.reader_url}</b> in <Link to={`/read?url=${encodeURIComponent(r.reader_url)}`}>Reader view</Link> &raquo;
             </p>
           )}
-          {r && <QuickAnswer answer={r.answer} infobox={r.infobox} q={q} />}
+          {r && <QuickAnswer answer={r.answer} infobox={wiki ? undefined : r.infobox} q={q} />}
           {error && <Sorry>trawl couldn&apos;t complete your search: {error.message}</Sorry>}
           {failed && <Sorry>every engine failed for this query. They may be rate-limiting this server; please try again in a minute.</Sorry>}
           {r?.done && !results.length && !failed && <NoMatch q={q} />}
@@ -86,18 +90,17 @@ export default function Results() {
           {r && results.length > 0 && cat === "news" && <NewsResults q={q} results={results} v={votes} />}
           {r && results.length > 0 && cat !== "images" && cat !== "news" && <WebResults q={q} results={results} cat={cat} v={votes} />}
         </Col>
+        {wiki && (
+          <Col lg={4} className="rside">
+            <WikiPanel key={wiki.url} a={wiki} />
+          </Col>
+        )}
       </Row>
 
       {r && results.length > 0 && <Pager page={page} hasNext={results.length >= 5} href={href} />}
       {r && <EngineLine engines={r.engines} pending={pending} />}
       <div className="bsf">
         <SearchForm q={q} cat={cat} variant="bottom" />
-        <div className="bsf-links">
-          <a href="#tips" onClick={(e) => (e.preventDefault(), setTips(true))}>
-            Search Tips
-          </a>{" "}
-          | <Link to={`/?c=${cat}`}>{catLabel[cat] ?? "trawl"} Home</Link>
-        </div>
       </div>
       <Footer />
       <TipsModal show={tips} onHide={() => setTips(false)} />

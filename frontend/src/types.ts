@@ -24,6 +24,19 @@ export interface Infobox {
   image?: string;
 }
 
+// engine.WikiArticle: the expanded panel for a Wikipedia result in the top five.
+export interface WikiArticle {
+  title: string;
+  description?: string;
+  paragraphs: string[];
+  url: string;
+  image?: string;
+  image_width?: number;
+  image_height?: number;
+  facts?: { label: string; value: string }[];
+  sections?: { title: string; anchor: string }[];
+}
+
 // answer.Answer
 export interface Answer {
   kind: "calc" | "integral" | "convert";

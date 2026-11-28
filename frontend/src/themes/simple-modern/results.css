@@ -1,0 +1,505 @@
+/* Results: each one a flat tile (like the new tab's site tiles); the selected one
+   gets the accent bar the new tab's picker uses. */
+
+.page-results {
+  --results-width: 960px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* The header, the info bar and the results share one centered column. */
+.rhead,
+.rbody > .rmain {
+  box-sizing: border-box;
+  margin-inline: auto;
+  max-width: calc(var(--results-width) + 32px);
+  width: 100%;
+}
+
+.rhead {
+  align-items: center;
+  display: flex;
+  gap: 24px;
+  padding: 4px 16px 16px;
+}
+
+.rhead .sf-top {
+  max-width: none;
+}
+
+.ssb {
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+  color: var(--muted);
+  display: flex;
+  font-size: 12.5px;
+  gap: 1em;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: var(--results-width);
+  padding: 0 0 8px;
+  width: calc(100% - 32px);
+}
+
+.ssb-info {
+  text-align: right;
+}
+
+.ssb b {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.rbody {
+  align-content: flex-start;
+  flex: 1 0 auto;
+  justify-content: center;
+}
+
+.rbody > .rmain {
+  flex: 0 0 auto;
+  padding: 4px 16px 0;
+}
+
+/* With the Wikipedia panel, the column widens and the results share it with
+   the panel on the right. */
+.page-results:has(.rbody.with-side) {
+  --results-width: 1180px;
+}
+
+.rbody > .rside {
+  box-sizing: border-box;
+  margin-inline: auto;
+  max-width: calc(var(--results-width) + 32px);
+  padding: 4px 16px 0;
+  width: 100%;
+}
+
+@media (min-width: 992px) {
+  .rbody.with-side {
+    flex-wrap: nowrap;
+    margin-inline: auto;
+    max-width: calc(var(--results-width) + 32px);
+    width: 100%;
+  }
+
+  .rbody.with-side > .rmain {
+    flex: 1 1 0;
+    margin: 0;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .rbody.with-side > .rside {
+    flex: 0 0 420px;
+    margin: 0;
+    padding: 14px 16px 0 8px;
+    width: 420px;
+  }
+}
+
+/* Image grids use the whole window. */
+.cat-images {
+  --results-width: 100vw;
+}
+
+.readcta {
+  font-size: 13px;
+  margin: 14px 0 0;
+}
+
+ol.res,
+.res {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.g {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  margin: 10px 0;
+  padding: 12px 16px;
+  position: relative;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.g.sel {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.sel-arrow {
+  display: none;
+}
+
+h3.r,
+.archive-main h2.r {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.3;
+  margin: 0 0 3px;
+}
+
+.g h3.r a:visited,
+.archive-main .r a:visited {
+  color: var(--visited);
+}
+
+.g .s {
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.g .s b {
+  font-weight: 600;
+}
+
+.g .meta {
+  color: var(--muted);
+}
+
+.g cite {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.gl {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.gl,
+.gl a,
+.gl a:visited {
+  color: var(--muted);
+}
+
+.gl a:hover {
+  color: var(--fg);
+}
+
+.gl .engs {
+  opacity: 0.75;
+}
+
+.votes {
+  margin-left: 6px;
+  opacity: 0.35;
+  transition: opacity 150ms;
+  white-space: nowrap;
+}
+
+.g:hover .votes,
+.g.sel .votes,
+.votes.voted,
+.votes:focus-within {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .votes {
+    opacity: 1;
+  }
+}
+
+.vbtn {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 4px;
+  vertical-align: 2px;
+}
+
+.vbtn:hover {
+  background: var(--tile-hover);
+  color: var(--fg);
+}
+
+.vbtn.on:first-child {
+  color: var(--good);
+}
+
+.vbtn.on:last-child {
+  color: var(--bad);
+}
+
+.g.down {
+  opacity: 0.6;
+}
+
+.vthumb {
+  float: left;
+  margin: 2px 12px 4px 0;
+}
+
+.vthumb img {
+  border: 1px solid var(--border);
+  height: 65px;
+  object-fit: cover;
+  width: 116px;
+}
+
+.cat-videos .g {
+  overflow: hidden;
+}
+
+/* The local summary: a tile with the accent at its edge. */
+.search-summary {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  box-shadow: inset 3px 0 0 var(--accent);
+  font-size: 13.5px;
+  margin: 10px 0;
+  padding: 14px 18px 0;
+}
+
+/* Fixed height: the text scrolls inside, the follow-up box stays at the bottom. */
+.search-summary {
+  height: 22em;
+  overflow-y: auto;
+}
+
+.search-summary > :last-child {
+  padding-bottom: 14px;
+}
+
+.summary-follow-up form {
+  background: var(--tile);
+  bottom: 0;
+  padding-top: 6px;
+  position: sticky;
+}
+
+.search-summary > div > p {
+  margin: 0;
+}
+
+.summary-content {
+  overflow-x: auto;
+}
+
+.summary-content > :last-child {
+  margin-bottom: 0;
+}
+
+.summary-follow-up {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.follow-up-turn {
+  margin-bottom: 12px;
+}
+
+.follow-up-turn > p {
+  margin-bottom: 0.3em;
+}
+
+.follow-up-fields {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.follow-up-fields input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: inherit;
+  flex: 1;
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+  padding: 6px 10px;
+}
+
+.follow-up-fields input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.sorry,
+.nomatch {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  font-size: 13.5px;
+  margin: 10px 0;
+  max-width: 44em;
+  padding: 14px 18px;
+}
+
+.sorry b {
+  font-size: 15px;
+}
+
+.sorry .detail {
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.nomatch ul {
+  margin: 0.3em 0 0;
+  padding-left: 1.6em;
+}
+
+.nomatch p:last-of-type {
+  margin-bottom: 0;
+}
+
+/* Quick answers: a tile above the results. */
+.onebox {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  border-collapse: separate;
+  font-size: 13.5px;
+  margin: 10px 0;
+  width: 100%;
+}
+
+.onebox td {
+  padding: 12px 0 12px 16px;
+  vertical-align: top;
+}
+
+.onebox td:last-child {
+  padding-right: 16px;
+}
+
+.onebox.calc .ob-icon {
+  vertical-align: middle;
+}
+
+.onebox.calc h2.r {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.ob-more,
+.ob-src {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.onebox.wiki .ob-icon img {
+  border: 1px solid var(--border);
+  max-height: 180px;
+  max-width: 140px;
+}
+
+.onebox.wiki .s {
+  max-width: 44em;
+}
+
+/* The pager: page numbers as small tiles; the "Trawwwl" letters are classic only. */
+.pager {
+  margin: 24px 0 16px;
+  text-align: center;
+}
+
+.pager table {
+  border-collapse: separate;
+  border-spacing: 4px 0;
+  margin: 0 auto;
+}
+
+.pager td {
+  padding: 0;
+  text-align: center;
+}
+
+.pager-letters {
+  display: none;
+}
+
+.pager-nums a,
+.pager-nums .cur {
+  background: var(--tile);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  display: inline-block;
+  font-size: 13px;
+  min-width: 34px;
+  padding: 6px 10px;
+  text-decoration: none;
+}
+
+.pager-nums a:hover {
+  background: var(--tile-hover);
+}
+
+.pager .cur {
+  box-shadow: inset 0 -2px 0 var(--accent);
+  font-weight: 600;
+}
+
+.pager .arrow {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.englines {
+  color: var(--muted);
+  font-size: 11.5px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.englines table {
+  border-collapse: collapse;
+  margin: 6px auto 0;
+  text-align: left;
+}
+
+.englines td {
+  padding: 1px 8px;
+}
+
+.englines tr.bad td:nth-child(2) {
+  color: var(--bad);
+}
+
+.englines td.err {
+  max-width: 36em;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bsf {
+  margin: 8px auto 0;
+  max-width: 640px;
+  padding: 16px;
+  text-align: center;
+  width: 100%;
+}
+
+.bsf .sf-row {
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .rhead {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .rhead form {
+    flex: 1 1 100%;
+  }
+
+  .ssb {
+    flex-wrap: wrap;
+  }
+
+  .gl .engs {
+    display: none;
+  }
+}
